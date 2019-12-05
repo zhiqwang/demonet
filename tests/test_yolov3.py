@@ -1,7 +1,7 @@
 import unittest
 import torch
 
-from demonet.modeling.yolov3 import Darknet
+from demonet.modeling import Darknet
 
 
 class YOLOV3Test(unittest.TestCase):
@@ -10,7 +10,7 @@ class YOLOV3Test(unittest.TestCase):
 
         device = torch.device('cuda:2')
 
-        model = Darknet('./demonet/modeling/config/yolov3.cfg').to(device)
+        model = Darknet('./configs/yolov3.cfg').to(device)
 
         model = model.to(device)
         input_shape = (32, 3, 416, 416)

@@ -4,11 +4,13 @@ import os
 import random
 import shutil
 from pathlib import Path
+import matplotlib.pyplot as plt
 
 import cv2
 import numpy as np
 from PIL import ExifTags
 from tqdm import tqdm
+import torch
 
 
 img_formats = ['.bmp', '.jpg', '.jpeg', '.png', '.tif', '.dng']
@@ -18,6 +20,122 @@ vid_formats = ['.mov', '.avi', '.mp4']
 for orientation in ExifTags.TAGS.keys():
     if ExifTags.TAGS[orientation] == 'Orientation':
         break
+
+
+def xyxy2xywh(x):
+    # Convert bounding box format from [x1, y1, x2, y2] to [x, y, w, h]
+    y = torch.zeros_like(x) if isinstance(x, torch.Tensor) else np.zeros_like(x)
+    y[:, 0] = (x[:, 0] + x[:, 2]) / 2
+    y[:, 1] = (x[:, 1] + x[:, 3]) / 2
+    y[:, 2] = x[:, 2] - x[:, 0]
+    y[:, 3] = x[:, 3] - x[:, 1]
+    return y
+
+
+def xywh2xyxy(x):
+    # Convert bounding box format from [x, y, w, h] to [x1, y1, x2, y2]
+    y = torch.zeros_like(x) if isinstance(x, torch.Tensor) else np.zeros_like(x)
+    y[:, 0] = x[:, 0] - x[:, 2] / 2
+    y[:, 1] = x[:, 1] - x[:, 3] / 2
+    y[:, 2] = x[:, 0] + x[:, 2] / 2
+    y[:, 3] = x[:, 1] + x[:, 3] / 2
+    return y
+
+
+def clip_coords(boxes, img_shape):
+    # Clip bounding xyxy bounding boxes to image shape (height, width)
+    boxes[:, [0, 2]] = boxes[:, [0, 2]].clamp(min=0, max=img_shape[1])  # clip x
+    boxes[:, [1, 3]] = boxes[:, [1, 3]].clamp(min=0, max=img_shape[0])  # clip y
+
+
+def scale_coords(img1_shape, coords, img0_shape):
+    # Rescale coords (xyxy) from img1_shape to img0_shape
+    gain = max(img1_shape) / max(img0_shape)  # gain  = old / new
+    coords[:, [0, 2]] -= (img1_shape[1] - img0_shape[1] * gain) / 2  # x padding
+    coords[:, [1, 3]] -= (img1_shape[0] - img0_shape[0] * gain) / 2  # y padding
+    coords[:, :4] /= gain
+    clip_coords(coords, img0_shape)
+    return coords
+
+
+def apply_classifier(x, model, img, im0):
+    # applies a second stage classifier to yolo outputs
+
+    for i, d in enumerate(x):  # per image
+        if d is not None and len(d):
+            d = d.clone()
+
+            # Reshape and pad cutouts
+            b = xyxy2xywh(d[:, :4])  # boxes
+            b[:, 2:] = b[:, 2:].max(1)[0].unsqueeze(1)  # rectangle to square
+            b[:, 2:] = b[:, 2:] * 1.3 + 30  # pad
+            d[:, :4] = xywh2xyxy(b).long()
+
+            # Rescale boxes from img_size to im0 size
+            scale_coords(img.shape[2:], d[:, :4], im0.shape)
+
+            # Classes
+            pred_cls1 = d[:, 6].long()
+            ims = []
+            for j, a in enumerate(d):  # per item
+                cutout = im0[int(a[1]):int(a[3]), int(a[0]):int(a[2])]
+                im = cv2.resize(cutout, (224, 224))  # BGR
+                # cv2.imwrite('test%i.jpg' % j, cutout)
+
+                im = im[:, :, ::-1].transpose(2, 0, 1)  # BGR to RGB, to 3x416x416
+                im = np.ascontiguousarray(im, dtype=np.float32)  # uint8 to float32
+                im /= 255.0  # 0 - 255 to 0.0 - 1.0
+                ims.append(im)
+
+            pred_cls2 = model(torch.Tensor(ims).to(d.device)).argmax(1)  # classifier prediction
+            x[i] = x[i][pred_cls1 == pred_cls2]  # retain matching class detections
+
+    return x
+
+
+def plot_test_txt():  # from utils.utils import *; plot_test()
+    # Plot test.txt histograms
+    x = np.loadtxt('test.txt', dtype=np.float32)
+    box = xyxy2xywh(x[:, :4])
+    cx, cy = box[:, 0], box[:, 1]
+
+    fig, ax = plt.subplots(1, 1, figsize=(6, 6))
+    ax.hist2d(cx, cy, bins=600, cmax=10, cmin=0)
+    ax.set_aspect('equal')
+    fig.tight_layout()
+    plt.savefig('hist2d.jpg', dpi=300)
+
+    fig, ax = plt.subplots(1, 2, figsize=(12, 6))
+    ax[0].hist(cx, bins=600)
+    ax[1].hist(cy, bins=600)
+    fig.tight_layout()
+    plt.savefig('hist1d.jpg', dpi=200)
+
+
+def plot_images(imgs, targets, paths=None, fname='images.jpg'):
+    # Plots training images overlaid with targets
+    imgs = imgs.cpu().numpy()
+    targets = targets.cpu().numpy()
+    # targets = targets[targets[:, 1] == 21]  # plot only one class
+
+    fig = plt.figure(figsize=(10, 10))
+    bs, _, h, w = imgs.shape  # batch size, _, height, width
+    bs = min(bs, 16)  # limit plot to 16 images
+    ns = np.ceil(bs ** 0.5)  # number of subplots
+
+    for i in range(bs):
+        boxes = xywh2xyxy(targets[targets[:, 0] == i, 2:6]).T
+        boxes[[0, 2]] *= w
+        boxes[[1, 3]] *= h
+        plt.subplot(ns, ns, i + 1).imshow(imgs[i].transpose(1, 2, 0))
+        plt.plot(boxes[[0, 2, 2, 0, 0]], boxes[[1, 1, 3, 3, 1]], '.-')
+        plt.axis('off')
+        if paths is not None:
+            s = Path(paths[i]).name
+            plt.title(s[:min(len(s), 40)], fontdict={'size': 8})  # limit to 40 characters
+    fig.tight_layout()
+    fig.savefig(fname, dpi=200)
+    plt.close()
 
 
 def exif_size(img):

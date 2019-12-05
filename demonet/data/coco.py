@@ -12,10 +12,10 @@ from tqdm import tqdm
 import torch
 import torch.utils.data as data
 
-from models.utils import xyxy2xywh, xywh2xyxy
-from datasets.utils import (
+from .utils import (
     exif_size, create_folder, load_mosaic, load_image,
     letterbox, augment_hsv, random_affine,
+    xyxy2xywh, xywh2xyxy,
 )
 
 img_formats = ['.bmp', '.jpg', '.jpeg', '.png', '.tif', '.dng']
