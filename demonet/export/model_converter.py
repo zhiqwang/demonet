@@ -31,8 +31,7 @@ def trans_net(model, input, model_name='TransferedPytorchModel'):
     NET_INITTED = True
     for name, module in model.named_modules():
         layer_names[module] = name
-    output = model(input)
-    print('>>> Keys of output: {}'.format(output.keys()))
+    _ = model(input)
     print('>>> Transform Completed.')
 
 
@@ -709,6 +708,26 @@ def _view(input, *args):
     return x
 
 
+def _reshape(input, *args):
+    x = raw_reshape(input, *args)
+    if not NET_INITTED:
+        return x
+    layer_name = log.add_layer(name='reshape')
+    top_blobs = log.add_blobs([x], name='reshape_blob')
+    layer = Layer_param(
+        name=layer_name,
+        type='Reshape',
+        bottom=[log.blobs(input)],
+        top=top_blobs,
+    )
+    # TODO: reshpae added to nn_tools layer
+    dims = list(args)
+    dims[0] = 0  # the first dim should be batch_size
+    layer.param.reshape_param.shape.CopyFrom(caffe_pb2.BlobShape(dim=dims))
+    log.cnet.add_layer(layer)
+    return x
+
+
 def _mean(input, *args, **kwargs):
     x = raw_mean(input, *args, **kwargs)
     if not NET_INITTED:
@@ -975,6 +994,8 @@ torch.sigmoid = Rp(torch.sigmoid, _sigmoid)
 for t in [torch.Tensor]:
     raw_view = t.view
     t.view = _view
+    raw_reshape = t.reshape
+    t.reshape = _reshape
     raw_mean = t.mean
     t.mean = _mean
     raw__add__ = t.__add__

@@ -12,14 +12,10 @@ def main(args):
     print('>>> Args: {}'.format(args))
 
     print('>>> Loading pytorch model...')
-    model = mobilenet_v2()
+    model = mobilenet_v2(pretrained=True)
     device = torch.device(args.device)
     model = model.to(device)
     model = model.eval()
-
-    # load checkpoints
-    checkpoint = torch.load(args.resume, map_location='cpu')
-    model.load_state_dict(checkpoint['model'])
 
     dummy_input = torch.randn(1, 3, 224, 224).to(device)
 
