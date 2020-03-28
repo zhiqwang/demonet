@@ -219,18 +219,18 @@ def _linear(raw, input, weight, bias=None):
     return x
 
 
-def _split(raw, tensor, split_size, dim=0):
+def _split(raw, input, split_size, dim=0):
     # split in pytorch is slice in caffe
-    x = raw(tensor, split_size, dim)
+    x = raw(input, split_size, dim)
     layer_name = log.add_layer('split')
     top_blobs = log.add_blobs(x, name='split_blob')
     layer = Layer_param(
         name=layer_name,
         type='Slice',
-        bottom=[log.blobs(tensor)],
+        bottom=[log.blobs(input)],
         top=top_blobs,
     )
-    slice_num = int(np.floor(tensor.size()[dim] / split_size))
+    slice_num = int(np.floor(input.size()[dim] / split_size))
     slice_param = caffe_pb2.SliceParameter(
         axis=dim,
         slice_point=[split_size * i for i in range(1, slice_num)],
@@ -864,7 +864,7 @@ def _imul(input, *args):
 
 # Permute layer
 def _permute(input, *args):
-    x = raw__permute__(input, *args)
+    x = raw_permute(input, *args)
     layer_name = log.add_layer(name='permute')
     log.add_blobs([x], name='permute_blob')
     layer = Layer_param(
@@ -885,7 +885,7 @@ def _permute(input, *args):
 
 # contiguous
 def _contiguous(input, *args):
-    x = raw__contiguous__(input, *args)
+    x = raw_contiguous(input, *args)
     layer_name = log.add_layer(name='contiguous')
     log.add_blobs([x], name='contiguous_blob')
     layer = Layer_param(
@@ -900,35 +900,35 @@ def _contiguous(input, *args):
 
 # pow
 def _pow(input, *args):
-    x = raw__pow__(input, *args)
+    x = raw_pow(input, *args)
     log.add_blobs([x], name='pow_blob')
     return x
 
 
 # sum
 def _sum(input, *args):
-    x = raw__sum__(input, *args)
+    x = raw_sum(input, *args)
     log.add_blobs([x], name='sum_blob')
     return x
 
 
 # exp
 def _exp(input, *args):
-    x = raw__exp__(input, *args)
+    x = raw_exp(input, *args)
     log.add_blobs([x], name='exp_blob')
     return x
 
 
 # sqrt
 def _sqrt(input, *args):
-    x = raw__sqrt__(input, *args)
+    x = raw_sqrt(input, *args)
     log.add_blobs([x], name='sqrt_blob')
     return x
 
 
 # unsqueeze
 def _unsqueeze(input, *args):
-    x = raw__unsqueeze__(input, *args)
+    x = raw_unsqueeze(input, *args)
     log.add_blobs([x], name='unsqueeze_blob')
     return x
 
@@ -937,7 +937,7 @@ def _unsqueeze(input, *args):
 def _expand_as(input, *args):
     # only support expand A(1, 1, H, W) to B(1, C, H, W)
 
-    x = raw__expand_as__(input, *args)
+    x = raw_expand_as(input, *args)
     layer_name = log.add_layer(name="expand_as", with_num=True)
     log.add_blobs([x], name='expand_as_blob')
     layer = caffe_net.Layer_param(
@@ -1010,19 +1010,19 @@ for t in [torch.Tensor]:
     t.__mul__ = _mul
     raw__imul__ = t.__imul__
     t.__imul__ = _imul
-    raw__permute__ = t.permute
+    raw_permute = t.permute
     t.permute = _permute
-    raw__contiguous__ = t.contiguous
+    raw_contiguous = t.contiguous
     t.contiguous = _contiguous
-    raw__exp__ = t.exp
+    raw_exp = t.exp
     t.exp = _exp
-    raw__pow__ = t.pow
+    raw_pow = t.pow
     t.pow = _pow
-    raw__sum__ = t.sum
+    raw_sum = t.sum
     t.sum = _sum
-    raw__sqrt__ = t.sqrt
+    raw_sqrt = t.sqrt
     t.sqrt = _sqrt
-    raw__unsqueeze__ = t.unsqueeze
+    raw_unsqueeze = t.unsqueeze
     t.unsqueeze = _unsqueeze
-    raw__expand_as__ = t.expand_as
+    raw_expand_as = t.expand_as
     t.expand_as = _expand_as
