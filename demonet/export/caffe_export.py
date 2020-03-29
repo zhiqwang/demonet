@@ -1,18 +1,29 @@
-import os
 import torch
 
-from demonet.modeling.backbone.mobilenet import mobilenet_v2
-import demonet.export.model_converter as torch2caffe
+from demonet.modeling.backbone.resnet import resnet18
+from demonet.conversion.pytorch.pytorch_parser import PytorchParser
+from demonet.conversion.pytorch.engine.hooks import Hook
+
+
+def parse(model, input, model_name='TransferedPytorchModel'):
+    print('>>> Starting transform, this will take a while...')
+    hooks = {}
+    for name, module in model.named_modules():
+        hooks[name] = Hook(module)
+
+    _ = model(input)
+
+    for key, value in hooks.items():
+        print('Key: \'{}\'\nInput, length: {}, the first shape: {}\nOutput: {}'.format(
+            key, len(hooks[key].input), hooks[key].input[0].shape,
+            hooks[key].output.shape,
+        ))
 
 
 def main(args):
-    args.caffe_model_path = os.path.join(args.output_dir, args.caffe_model_path)
-    args.caffe_weight_path = os.path.join(args.output_dir, args.caffe_weight_path)
-
     print('>>> Args: {}'.format(args))
-
     print('>>> Loading pytorch model...')
-    model = mobilenet_v2(pretrained=True)
+    model = resnet18(pretrained=True)
     device = torch.device(args.device)
     model = model.to(device)
     model = model.eval()
@@ -21,9 +32,8 @@ def main(args):
 
     print('>>> Convert pytorch model to CAFFE: {}'.format(args.arch))
 
-    torch2caffe.trans_net(model, dummy_input, args.arch)  # Import the pytorch model to CAFFE
-    torch2caffe.save_prototxt(args.caffe_model_path)
-    torch2caffe.save_caffemodel(args.caffe_weight_path)
+    pytorch_parser = PytorchParser(model, dummy_input)
+    pytorch_parser.run(args.output_path)
 
 
 def parse_args():
@@ -35,12 +45,8 @@ def parse_args():
                         help='device')
     parser.add_argument('--resume', default=None,
                         help='resume from checkpoint')
-    parser.add_argument('--output-dir', default='./checkpoints',
+    parser.add_argument('--output-path', default='./checkpoints',
                         help='path where to save')
-    parser.add_argument('--caffe-model-path', default='deploy.prototxt',
-                        help='the path of CAFFE model')
-    parser.add_argument('--caffe-weight-path', default='deploy.caffemodel',
-                        help='the path of CAFFE weight')
 
     args = parser.parse_args()
     return args
