@@ -1,8 +1,8 @@
 import torch
 
-from demonet.modeling.backbone.resnet import resnet18
-from demonet.conversion.pytorch.pytorch_parser import PytorchParser
-from demonet.conversion.pytorch.engine.hooks import Hook
+from ..modeling.backbone.resnet import resnet18
+from ..conversion.pytorch.pytorch_parser import PytorchParser
+from ..conversion.pytorch.engine.hooks import Hook
 
 
 def parse(model, input, model_name='TransferedPytorchModel'):
