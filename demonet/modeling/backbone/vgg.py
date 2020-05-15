@@ -2,12 +2,12 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from ..priors_generator.prior_box import (
-    PriorBoxGenerator,
-    TargetsPriorsAssignor,
-)
-from ..box_heads.multibox_head import MultiBoxLoss
-from ..box_heads.box_predictor import BoxPredictor
+from ..box_heads.multibox_head import MultiBoxHeads
+
+
+model_urls = {
+    'vgg': 'https://s3.amazonaws.com/amdegroot-models/vgg16_reducedfc.pth',
+}
 
 
 class SSD(nn.Module):
@@ -19,26 +19,16 @@ class SSD(nn.Module):
         3) associated priorbox layer to produce default bounding
            boxes specific to the layer's feature map size.
     See: https://arxiv.org/pdf/1512.02325.pdf for more details.
-
     Args:
-        size: input image size
         base: VGG16 layers for input, size of either 300 or 500
         extras: extra layers that feed to multibox loc and conf layers
         head: "multibox head" consists of loc and conf conv layers
     """
 
     def __init__(
-        self, phase, size, base, extras, head, num_classes,
-        overlap_threshold=0.5, neg_pos_ratio=3,
-        variances=[0.1, 0.2], model_config=None,
+        self, base, extras, head, **kwargs,
     ):
         super().__init__()
-        self.num_classes = num_classes
-        if model_config is not None:
-            self.priors = PriorBoxGenerator(model_config)
-        else:
-            self.priors = None
-        self.size = size
 
         # SSD network
         self.vgg = nn.ModuleList(base)
@@ -49,31 +39,24 @@ class SSD(nn.Module):
         self.loc = nn.ModuleList(head[0])
         self.conf = nn.ModuleList(head[1])
 
-        if phase == 'train':
-            self.assign_targets_to_priors = TargetsPriorsAssignor(
-                variances,
-                overlap_threshold,
-            )
-            self.multibox_loss = MultiBoxLoss(neg_pos_ratio=neg_pos_ratio)
-        elif phase == 'test':
-            self.softmax = nn.Softmax(dim=-1)
-            self.predictor = BoxPredictor(num_classes, 0, 200, 0.01, 0.45)
-        else:
-            raise ValueError("Phase: [{}] not recognized".format(phase))
+        self.multibox_heads = MultiBoxHeads(**kwargs)
+
+    def eager_outputs(self, losses, detections):
+        if self.training:
+            return losses
+
+        return detections
 
     def forward(self, images, targets=None):
         """Applies network layers and ops on input image(s).
-
         Args:
             images: input image or batch of images. Shape: [batch, 3, 300, 300].
-
         Return:
             Depending on phase:
             test:
                 Variable(tensor) of output class label predictions,
                 confidence score, and corresponding location predictions for
                 each object detected. Shape: [batch, topk, 7]
-
             train:
                 list of concat outputs from:
                     1: confidence layers, Shape: [batch*num_priors, num_classes]
@@ -110,19 +93,12 @@ class SSD(nn.Module):
             loc.append(l(s).permute(0, 2, 3, 1).contiguous())
             conf.append(c(s).permute(0, 2, 3, 1).contiguous())
 
-        loc = torch.cat([o.view(o.size(0), -1) for o in loc], 1)
-        conf = torch.cat([o.view(o.size(0), -1) for o in conf], 1)
+        loc = torch.cat([o.view(o.size(0), -1) for o in loc], dim=1)
+        conf = torch.cat([o.view(o.size(0), -1) for o in conf], dim=1)
 
-        loc = loc.view(loc.size(0), -1, 4)  # loc preds
-        conf = conf.view(conf.size(0), -1, self.num_classes)  # conf preds
-        priors = self.priors().to(images.device)
+        detections, detector_losses = self.multibox_heads(loc, conf, targets)
 
-        if self.training:
-            gt_loc, gt_labels = self.assign_targets_to_priors(priors, targets)
-            output = self.multibox_loss(loc, conf, gt_loc, gt_labels)
-        else:
-            output = self.predictor(loc, self.softmax(conf), priors)
-        return output
+        return self.eager_outputs(detector_losses, detections)
 
 
 # This function is derived from torchvision VGG make_layers()
@@ -214,15 +190,14 @@ mbox = {
 }
 
 
-def build_model(phase, size=300, num_classes=21, **kwargs):
-    if phase not in ['test', 'train']:
-        raise ValueError("Phase: [{}] not recognized".format(phase))
-
+def build_model(size=300, num_classes=21, **kwargs):
     if size != 300:
-        raise NotImplementedError("You specified size [{}]. However, currently only "
-                                  "SSD300 (size=300) is supported!".format(size))
+        raise NotImplementedError(
+            "You specified size [{}]. However, currently only "
+            "SSD300 (size=300) is supported!".format(size),
+        )
 
-    base_, extras_, head_ = multibox(
+    base_layers, extras_layers, head_layers = multibox(
         vgg(base[str(size)], 3),
         add_extras(extras[str(size)], 1024),
         mbox[str(size)],
@@ -230,8 +205,17 @@ def build_model(phase, size=300, num_classes=21, **kwargs):
     )
 
     model = SSD(
-        phase, size, base_, extras_, head_,
-        num_classes, **kwargs,
+        base_layers,
+        extras_layers,
+        head_layers,
+        image_size=size,
+        aspect_ratios=[[2], [2, 3], [2, 3], [2, 3], [2], [2]],
+        feature_maps=[38, 19, 10, 5, 3, 1],
+        min_ratio=20,
+        max_ratio=90,
+        steps=[8, 16, 32, 64, 100, 300],
+        clip=False,
+        **kwargs,
     )
 
     return model

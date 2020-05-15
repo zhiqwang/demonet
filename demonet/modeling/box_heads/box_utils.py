@@ -1,4 +1,6 @@
 import math
+import numpy as np
+
 import torch
 
 
@@ -57,6 +59,19 @@ def pairwise_iou(boxes1, boxes2, eps=1e-5):
     area1 = area_of(boxes1[..., :2], boxes1[..., 2:])
     area2 = area_of(boxes2[..., :2], boxes2[..., 2:])
     return overlap_area / (area1 + area2 - overlap_area + eps)
+
+
+def matrix_iou(boxes1, boxes2):
+    """
+    return iou of boxes1 and boxes2, numpy version for data augenmentation
+    """
+    lt = np.maximum(boxes1[:, np.newaxis, :2], boxes2[:, :2])
+    rb = np.minimum(boxes1[:, np.newaxis, 2:], boxes2[:, 2:])
+
+    area_i = np.prod(rb - lt, axis=2) * (lt < rb).all(axis=2)
+    area_a = np.prod(boxes1[:, 2:] - boxes1[:, :2], axis=1)
+    area_b = np.prod(boxes2[:, 2:] - boxes2[:, :2], axis=1)
+    return area_i / (area_a[:, np.newaxis] + area_b - area_i)
 
 
 def hard_negative_mining(loss, targets, neg_pos_ratio):

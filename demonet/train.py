@@ -19,33 +19,42 @@ import time
 import torch
 import torch.utils.data
 
-from .data.utils import init_distributed_mode, save_on_master, mkdir
-from .data.dataset import get_dataset, get_transform, collate_fn
-from .config.CC import Config
+from .data.dataset import (
+    get_dataset,
+    get_transform,
+    collate_train,
+    collate_eval,
+)
+from .utils.distribute import init_distributed_mode, save_on_master, mkdir
+
 from .engine import train_one_epoch, evaluate
+
 from .modeling.backbone.vgg import build_model
 
 
 def main(args):
     init_distributed_mode(args)
     print(args)
-    cfg = Config.fromfile(args.config)
 
     device = torch.device(args.device)
 
     # Data loading code
     print("Loading data")
-    dataset, num_classes = get_dataset(
+    dataset = get_dataset(
         args.dataset,
         "train",
-        get_transform(train=True),
+        get_transform(is_train=True, bgr_mean=args.bgr_mean, bgr_std=args.bgr_std),
         args.data_path,
+        mode=args.coco_mode,
+        year=args.coco_year,
     )
-    dataset_test, _ = get_dataset(
+    dataset_test = get_dataset(
         args.dataset,
         "val",
-        get_transform(train=False),
+        get_transform(is_train=False, bgr_mean=args.bgr_mean, bgr_std=args.bgr_std),
         args.data_path,
+        mode=args.coco_mode,
+        year=args.coco_year,
     )
 
     print("Creating data loaders")
@@ -59,24 +68,29 @@ def main(args):
     train_batch_sampler = torch.utils.data.BatchSampler(
         train_sampler, args.batch_size, drop_last=True,
     )
+    test_batch_sampler = torch.utils.data.BatchSampler(
+        test_sampler, args.batch_size, drop_last=False,
+    )
 
     data_loader = torch.utils.data.DataLoader(
         dataset,
         batch_sampler=train_batch_sampler,
         num_workers=args.workers,
-        collate_fn=collate_fn,
+        collate_fn=collate_train,
     )
 
     data_loader_test = torch.utils.data.DataLoader(
         dataset_test,
-        batch_size=1,
-        sampler=test_sampler,
+        batch_sampler=test_batch_sampler,
         num_workers=args.workers,
-        collate_fn=collate_fn,
+        collate_fn=collate_eval,
     )
 
     print("Creating model")
-    model = build_model('train', num_classes=num_classes, model_config=cfg.model)
+    model = build_model(
+        size=args.image_size,
+        num_classes=args.num_classes,
+    )
     model.to(device)
 
     model_without_ddp = model
@@ -146,13 +160,24 @@ if __name__ == "__main__":
 
     parser.add_argument('--data-path', default='./data-bin',
                         help='dataset')
-    parser.add_argument('--config', default='./demonet/config/COCO.py')
     parser.add_argument('--dataset', default='coco',
                         help='dataset')
+    parser.add_argument('--coco-mode', default='instances',
+                        help='coco mode')
+    parser.add_argument('--coco-year', default=2017,
+                        help='coco year')
+    parser.add_argument('--bgr-mean', type=int, nargs='+',
+                        help='mean')
+    parser.add_argument('--bgr-std', type=int, nargs='+',
+                        help='mean')
     parser.add_argument('--model', default='ssd',
                         help='model')
     parser.add_argument('--device', default='cuda',
                         help='device')
+    parser.add_argument('--image-size', default=300, type=int,
+                        help='input size of models')
+    parser.add_argument('--num-classes', default=21, type=int,
+                        help='number classes of datasets')
     parser.add_argument('--batch-size', default=32, type=int,
                         help='images per gpu, the total batch size is $NGPU x batch_size')
     parser.add_argument('--epochs', default=26, type=int, metavar='N',

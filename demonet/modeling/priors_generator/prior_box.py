@@ -2,52 +2,62 @@ from itertools import product
 import math
 
 import torch
-
-from ..box_heads.box_utils import xywha_to_xyxy
-from .anchor_utils import config_parse, assign_priors, encode
+import torch.nn as nn
 
 
-class TargetsPriorsAssignor:
-    def __init__(self, variances, iou_threshold):
-        self.variances = variances
-        self.iou_threshold = iou_threshold
-
-    def __call__(self, priors_xywha, targets):
-        priors_xyxy = xywha_to_xyxy(priors_xywha)
-        gt_locations = list()
-        gt_labels = list()
-        for box, label in zip(targets['boxes'], targets['labels']):
-            box, label = assign_priors(box, label, priors_xyxy, self.iou_threshold)
-            locations = encode(box, priors_xywha, self.variances)
-            gt_locations.append(locations)
-            gt_labels.append(label)
-
-        gt_locations = torch.stack(gt_locations, 0)
-        gt_labels = torch.stack(gt_labels, 0)
-        return gt_locations, gt_labels
-
-
-class PriorBoxGenerator:
-    """Generate priorbox coordinates in XYWHA_REL BoxMode for each source feature map
+class PriorBoxGenerator(nn.Module):
     """
-    def __init__(self, cfg):
-        cfg = config_parse(cfg)
+    Module that generates priors in XYWHA_REL BoxMode for a set of feature maps and
+    image sizes.
+    The module support computing priors at multiple sizes and aspect ratios
+    per feature map. This module assumes aspect ratio = height / width for
+    each anchor.
+    sizes and aspect_ratios should have the same number of elements, and it should
+    correspond to the number of feature maps.
+    sizes[i] and aspect_ratios[i] can have an arbitrary number of elements,
+    and AnchorGenerator will output a set of sizes[i] * aspect_ratios[i] priors
+    per spatial location for feature map i.
+    """
+    def __init__(
+        self,
+        image_size=304,
+        aspect_ratios=[[2, 3], [2, 3], [2, 3], [2, 3], [2, 3]],
+        feature_maps=[19, 10, 5, 3, 1],
+        min_ratio=15,
+        max_ratio=90,
+        steps=[16, 30, 60, 101, 304],
+        clip=True,
+    ):
+        super().__init__()
 
-        self.image_size = cfg['min_dim']
-        # number of priors for feature map location (either 4 or 6)
-        self.num_priors = len(cfg['aspect_ratios'])
-        self.variance = cfg['variance'] or [0.1]
-        self.feature_maps = cfg['feature_maps']
-        self.min_sizes = cfg['min_sizes']
-        self.max_sizes = cfg['max_sizes']
-        self.steps = cfg['steps']
-        self.aspect_ratios = cfg['aspect_ratios']
-        self.clip = cfg['clip']
-        for v in self.variance:
-            if v <= 0:
-                raise ValueError('Variances must be greater than 0')
+        self.aspect_ratios = aspect_ratios
+        self.image_size = image_size
+        self.feature_maps = feature_maps
+        self.num_priors = len(feature_maps)
+        self.min_ratio = min_ratio
+        self.max_ratio = max_ratio
+        self.min_sizes, self.max_sizes = self.compute_sizes()
+        self.steps = steps
+        self.clip = clip
 
-    def __call__(self):
+    def compute_sizes(self):
+        step = int(math.floor(self.max_ratio - self.min_ratio) / (self.num_priors - 2))
+        min_sizes = list()
+        max_sizes = list()
+        for ratio in range(self.min_ratio, self.max_ratio + 1, step):
+            min_sizes.append(self.image_size * ratio / 100)
+            max_sizes.append(self.image_size * (ratio + step) / 100)
+
+        if self.min_ratio == 20:
+            min_sizes = [self.image_size * 10 / 100.] + min_sizes
+            max_sizes = [self.image_size * 20 / 100.] + max_sizes
+        else:
+            min_sizes = [self.image_size * 7 / 100.] + min_sizes
+            max_sizes = [self.image_size * 15 / 100.] + max_sizes
+
+        return min_sizes, max_sizes
+
+    def forward(self):
         priors = []
         for k, f in enumerate(self.feature_maps):
             scale = self.image_size / self.steps[k]
@@ -75,8 +85,8 @@ class PriorBoxGenerator:
                     priors.append([cx, cy, w / ratio, h * ratio])
 
         # back to torch land
-        output = torch.tensor(priors)
+        output = torch.as_tensor(priors, dtype=torch.float32)
         if self.clip:
-            output.clamp_(max=1, min=0)
+            output.clamp_(min=0, max=1)
 
         return output

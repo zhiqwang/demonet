@@ -28,22 +28,37 @@ class CocoDetection(torchvision.datasets.CocoDetection):
         img_id = self.ids[index]
         ann_ids = coco.getAnnIds(imgIds=img_id)
         anns = coco.loadAnns(ann_ids)
-        target = dict(image_id=img_id, annotations=anns)
 
         path = coco.loadImgs(img_id)[0]['file_name']
         image = cv2.imread(os.path.join(self.root, path))
+        image_shape = image.shape[1::-1]
 
+        target = dict(
+            image_id=img_id,
+            image_shape=image_shape,
+            annotations=anns,
+        )
         if self._transforms is not None:
             image, target = self._transforms(image, target)
 
         return image, target
 
 
-def get_coco(root, image_set, transforms, mode='instances'):
-    anno_file_template = "{}_{}2017.json"
+def get_coco(
+    root,
+    image_set,
+    transforms,
+    mode='instances',
+    year=2017,
+):
+    anno_file_template = "{}_{}{}.json"
     PATHS = {
-        "train": ("images", os.path.join("annotations", anno_file_template.format(mode, "train"))),
-        "val": ("images", os.path.join("annotations", anno_file_template.format(mode, "val"))),
+        "train": ("images", os.path.join(
+            "annotations", anno_file_template.format(mode, "train", year),
+        )),
+        "val": ("images", os.path.join(
+            "annotations", anno_file_template.format(mode, "val", year),
+        )),
     }
 
     t = [ConvertCocoPolysToMask()]
@@ -66,29 +81,41 @@ def get_coco(root, image_set, transforms, mode='instances'):
     return dataset
 
 
-def get_dataset(name, image_set, transform, data_path):
+def get_dataset(
+    name, image_set, transform, data_path,
+    mode='instance', year=2017,
+):
 
     dataset = get_coco(
         data_path,
         image_set=image_set,
         transforms=transform,
+        mode=mode,
+        year=year,
     )
-    num_classes = 21
 
-    return dataset, num_classes
+    return dataset
 
 
-def get_transform(train):
+def get_transform(
+    is_train=True,
+    image_size=300,
+    bgr_mean=None,
+    bgr_std=None,
+):
     transforms = []
-    # transforms.append(T.AffineTransform(64, (304, 304)))
-    transforms.append(T.ResizeTransform(304, 304))
-    if train:
+    if is_train:
         transforms.append(T.RandomHorizontalFlip(0.5))
+        transforms.append(T.AffineTransform(image_size, random_aug=True))
+    else:
+        transforms.append(T.ResizeTransform(image_size, image_size))
+
+    transforms.append(T.Normalize(bgr_mean, bgr_std))
     transforms.append(T.ToTensor())
     return Compose(transforms)
 
 
-def collate_fn(batch):
+def collate_train(batch):
     images = list()
     boxes = list()
     labels = list()
@@ -107,12 +134,26 @@ def collate_fn(batch):
     return images, targets
 
 
+def collate_eval(batch):
+    images = list()
+    targets = list()
+
+    for image, target in batch:
+        images.append(image)
+        targets.append(target)
+
+    images = torch.stack(images, 0)
+
+    return images, targets
+
+
 class ConvertCocoPolysToMask(object):
     def __call__(self, image, target):
         height, width = image.shape[:2]
 
         image_id = target["image_id"]
         image_id = np.array([image_id])
+        image_shape = target["image_shape"]
 
         anno = target["annotations"]
 
@@ -144,6 +185,7 @@ class ConvertCocoPolysToMask(object):
         target["boxes"] = boxes
         target["labels"] = classes
         target["image_id"] = image_id
+        target["image_shape"] = image_shape
 
         return image, target
 

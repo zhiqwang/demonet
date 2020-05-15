@@ -16,13 +16,34 @@ def image_transform(
     # Normalization
     if mean is not None:
         mean = np.array(mean, dtype=np.float32)  # BGR
+        image -= mean[None, None, :]
+    if std is not None:
+        std = np.array(std, dtype=np.float32)  # BGR
+        image /= std[None, None, :]
+    image = image.transpose([2, 0, 1])  # change to C x H x W
+
+    return image
+
+
+def image_transform_gray(
+    img_name,
+    input_shape=(304, 304),
+    mean=None,
+    std=None,
+):
+    image = cv2.imread(img_name, cv2.IMREAD_GRAYSCALE).astype(np.float32)
+
+    # Normalization
+    if mean is not None:
+        mean = np.array(mean, dtype=np.float32)  # BGR
         image -= mean
     if std is not None:
         std = np.array(std, dtype=np.float32)  # BGR
         image /= std
-    image = image.transpose([2, 0, 1])  # change to C x H x W
 
-    return image
+    image = cv2.resize(image, input_shape, interpolation=cv2.INTER_CUBIC)
+
+    return image[None, :]
 
 
 def cv2_imshow(a):

@@ -1,4 +1,3 @@
-import math
 import torch
 
 from ..box_heads.box_utils import (
@@ -6,46 +5,6 @@ from ..box_heads.box_utils import (
     xywha_to_xyxy,
     xyxy_to_xywha,
 )
-
-
-def get_min_max_sizes(
-    min_ratio,
-    max_ratio,
-    input_size,
-    mbox_source_num,
-):
-    step = int(math.floor(max_ratio - min_ratio) / (mbox_source_num - 2))
-    min_sizes = list()
-    max_sizes = list()
-    for ratio in range(min_ratio, max_ratio + 1, step):
-        min_sizes.append(input_size * ratio / 100)
-        max_sizes.append(input_size * (ratio + step) / 100)
-
-    if min_ratio == 20:
-        min_sizes = [input_size * 10 / 100.] + min_sizes
-        max_sizes = [input_size * 20 / 100.] + max_sizes
-    else:
-        min_sizes = [input_size * 7 / 100.] + min_sizes
-        max_sizes = [input_size * 15 / 100.] + max_sizes
-
-    return min_sizes, max_sizes
-
-
-def config_parse(config):
-    cfg = dict()
-    cfg['feature_maps'] = config.anchor_config.feature_maps
-    cfg['min_dim'] = config.input_size
-    cfg['steps'] = config.anchor_config.steps
-    cfg['min_sizes'], cfg['max_sizes'] = get_min_max_sizes(
-        config.anchor_config.min_ratio,
-        config.anchor_config.max_ratio,
-        config.input_size,
-        len(cfg['feature_maps']),
-    )
-    cfg['aspect_ratios'] = config.anchor_config.aspect_ratios
-    cfg['variance'] = [0.1, 0.2]
-    cfg['clip'] = True
-    return cfg
 
 
 def encode(boxes, priors, variances):

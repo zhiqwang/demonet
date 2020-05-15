@@ -7,6 +7,7 @@ import numpy as np
 import cv2
 
 import torch
+
 from fvcore.transforms.transform import Transform
 
 
@@ -14,22 +15,30 @@ class AffineTransform(Transform):
     """
     Augmentation from CenterNet
     """
-    def __init__(self, boarder, output_size, random_aug=True):
+    def __init__(self, output_size, boarder=64, random_aug=True):
         """
         Args:
+            output_size(int or tuple): a tuple represents (width, height) of image
             boarder(int): boarder size of image
-            output_size(tuple): a tuple represents (width, height) of image
             random_aug(bool): whether apply random augmentation on annos or not
         """
         super().__init__()
         self._set_attributes(locals())
+        if isinstance(output_size, int):
+            self.output_size = (output_size, output_size)
 
     def __call__(self, image, target):
         self.affine = self.get_transform(image)
         image = self.apply_image(image)
         bbox = target["boxes"]
         bbox = self.apply_box(bbox)
+        # Filter blank bounding boxes
+        keep = (bbox[:, 3] > bbox[:, 1]) & (bbox[:, 2] > bbox[:, 0])
+        bbox = bbox[keep]
+        classes = target["labels"][keep]
+
         target["boxes"] = bbox
+        target["labels"] = classes
 
         return image, target
 
@@ -41,7 +50,7 @@ class AffineTransform(Transform):
         center, scale = self.generate_center_and_scale(img_shape)
         src, dst = self.generate_src_and_dst(center, scale, self.output_size)
 
-        return cv2.getAffineTransform(np.float32(src), np.float32(dst))
+        return cv2.getAffineTransform(src, dst)
 
     def apply_image(self, img: np.ndarray) -> np.ndarray:
         """
@@ -98,13 +107,9 @@ class AffineTransform(Transform):
         center = np.array([width / 2, height / 2], dtype=np.float32)
         scale = float(max(img_shape))
         if self.random_aug:
-            scale = scale * np.random.choice(np.arange(0.6, 1.4, 0.1))
-            h_boarder = self._get_boarder(self.boarder, height)
-            w_boarder = self._get_boarder(self.boarder, width)
-            center[0] = np.random.randint(low=w_boarder, high=width - w_boarder)
-            center[1] = np.random.randint(low=h_boarder, high=height - h_boarder)
-        else:
-            raise NotImplementedError("Non-random augmentation not implemented")
+            scale = scale * np.random.choice(np.arange(0.9, 1.1, 0.05))
+            center[0] = np.random.randint(low=(width // 2 - 5), high=(width // 2 + 5))
+            center[1] = np.random.randint(low=(height // 2 - 5), high=(height // 2 + 5))
 
         return center, scale
 
@@ -216,23 +221,68 @@ class ResizeTransform(Transform):
         return coords
 
 
-class ToTensor(object):
+class Normalize(Transform):
+    """
+    Normalization
+    """
+    def __init__(self, mean, std):
+        """
+        Args:
+            mean (list): mean
+            std (list): std
+        """
+        super().__init__()
+        self._set_attributes(locals())
+
     def __call__(self, image, target):
-        height, width = image.shape[:2]
+
+        image = self.apply_image(image)
+        bbox = target["boxes"]
+        bbox = self.apply_box(bbox)
+        target["boxes"] = bbox
+
+        return image, target
+
+    def apply_image(self, img):
         # Pytorch's dataloader is efficient on torch.Tensor due to shared-memory,
         # Therefore it's important to use torch.Tensor.
-        image = torch.as_tensor(image.transpose(2, 0, 1).astype("float32"))
+        img = img.astype("float32")
+        if self.mean is not None:
+            mean = np.array(self.mean, dtype=np.float32)
+            img -= mean[None, None, :]
+        if self.std is not None:
+            std = np.array(self.std, dtype=np.float32)
+            img /= std[None, None, :]
+        # Set default scale of image in [0., 1.]
+        if self.mean is None and self.std is None:
+            img /= 255.
+        return img
+
+    def apply_coords(self, coords):
+        return coords
+
+
+class ToTensor:
+
+    def __call__(self, image, target):
+        height, width = image.shape[:2]
+
+        image = torch.as_tensor(image.transpose(2, 0, 1))
         # Can use uint8 if it turns out to be slow some day
         # XYXY_ABS BoxMode
-        bbox = torch.as_tensor(target["boxes"])
+        bbox = torch.as_tensor(target["boxes"].astype("float32"))
         # converted XYXY_REL BoxMode
         bbox[:, 0::2] /= width
         bbox[:, 1::2] /= height
 
         label = torch.as_tensor(target["labels"].astype("int64"))
+        img_id = target['image_id']
+        img_shape = target['image_shape']
+
         # Concat the bbox with label
-        # target = torch.cat((bbox, label), dim=1)
         target = {
+            'image_id': img_id,
+            'image_shape': img_shape,
             'boxes': bbox,
             'labels': label
         }

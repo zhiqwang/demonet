@@ -2,20 +2,17 @@ import cv2
 import torch
 
 from .modeling.backbone.vgg import build_model
-from .config.CC import Config
 from .utils.image import image_transform
 from .utils.overlay import overlay_boxes, overlay_class_names
 
 
 def main(args):
     print('>>> Args: {}'.format(args))
-    cfg = Config.fromfile(args.config)
+
     device = torch.device('cpu')
     model = build_model(
-        'test',
-        size=cfg.model.input_size,
-        num_classes=cfg.model.num_classes,
-        model_config=cfg.model,
+        size=args.image_size,
+        num_classes=args.num_classes,
     )
     model.eval()
     model.to(device)
@@ -26,7 +23,7 @@ def main(args):
     image = image_transform(
         args.image_path,
         input_shape=(300, 300),
-        mean=[103.94, 116.78, 123.68],  # BGR
+        mean=[104, 117, 124],  # BGR
     )
 
     image = image[None, :]
@@ -37,37 +34,9 @@ def main(args):
 
     if args.overlay_result:
         image = cv2.imread(args.image_path)
-        image_shape = torch.Tensor(image.shape[1::-1]).repeat(2)
         categories = None
-        predictions = parse_output(detections, image_shape)
-        image = overlay_boxes(image, predictions)
-        image = overlay_class_names(image, predictions, categories)
-
-
-def parse_output(detections, image_shape, threshold=0.6):
-    # Parse the outputs
-    predictions = {}
-    # detection format: label, score, xmin, ymin, xmax, ymax
-    det_label = detections[0, :, 0]
-    det_conf = detections[0, :, 1]
-    det_boxes = detections[0, :, 2:]
-
-    # Get detections with confidence higher than threshold.
-    top_indices = [i for i, conf in enumerate(det_conf) if conf >= threshold]
-
-    top_label = det_label[top_indices]
-    top_conf = det_conf[top_indices]
-    top_boxes = det_boxes[top_indices, :]
-    top_boxes = top_boxes * image_shape
-
-    predictions = {}
-    predictions['labels'] = top_label.cpu().numpy().astype(int)
-    predictions['scores'] = top_conf.cpu().numpy()
-    predictions['boxes'] = []
-    for box in top_boxes.cpu().numpy().astype(int):
-        predictions['boxes'].append(box)
-
-    return predictions
+        image = overlay_boxes(image, detections)
+        image = overlay_class_names(image, detections, categories)
 
 
 def parse_args():
@@ -75,7 +44,10 @@ def parse_args():
     parser = argparse.ArgumentParser(description='pytorch ssd converter')
     parser.add_argument('--arch', default='ssd',
                         help='model architecture: {} (default: ssd)')
-    parser.add_argument('--config', default='./ssd/config/Pelee_COCO.py')
+    parser.add_argument('--image-size', default=304, type=int,
+                        help='input size of models')
+    parser.add_argument('--num-classes', default=4, type=int,
+                        help='number classes of datasets')
     parser.add_argument('--device', default='cpu',
                         help='device')
     parser.add_argument('--resume', default=None,
