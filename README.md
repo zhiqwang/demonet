@@ -2,21 +2,9 @@
 
 This repo is about object detection.
 
-## Model conversion
+Currently work in process, very pleasure for suggestion and cooperation.
 
-### Export to caffe
+## Training (SSD)
 ```
-python -m demonet.export.caffe_export \
-    --output-dir ./checkpoints/imagenet/ \
-    --caffe-model-path mobilenet_v2.prototxt \
-    --caffe-weight-path mobilenet_v2.caffemodel
-```
-
-### Inference with caffe
-```
-python -m demonet.export.inference_caffe \
-    --output-dir ./checkpoints/imagenet/ \
-    --caffe-model-path mobilenet_v2.prototxt \
-    --caffe-weight-path mobilenet_v2.caffemodel \
-    --image-path [test.jpg]
+CUDA_VISIBLE_DEVICES=[GPU_ID] python -m demonet.train --data-path [DATA-PATH]
 ```

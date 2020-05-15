@@ -5,7 +5,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from demonet.modeling.utils import build_targets, bbox_iou
+from ..modeling.utils import build_targets, bbox_iou
 
 matplotlib.rc('font', **{'size': 11})
 

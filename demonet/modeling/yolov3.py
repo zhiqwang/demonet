@@ -6,8 +6,6 @@ import torch.nn.functional as F
 from .utils import parse_model_cfg, save_weights, load_darknet_weights
 from fvcore.common.registry import Registry
 
-from demonet.utils import fuse_conv_and_bn
-
 ONNX_EXPORT = False
 
 

@@ -1,466 +1,188 @@
-import glob
-import math
 import os
-import random
-import shutil
-from pathlib import Path
-import matplotlib.pyplot as plt
 
-import cv2
+import errno
+import pickle
 import numpy as np
-from PIL import ExifTags
-from tqdm import tqdm
+
 import torch
+import torch.distributed as dist
 
 
-img_formats = ['.bmp', '.jpg', '.jpeg', '.png', '.tif', '.dng']
-vid_formats = ['.mov', '.avi', '.mp4']
+def matrix_iou(a, b):
+    """
+    return iou of a and b, numpy version for data augenmentation
+    """
+    lt = np.maximum(a[:, np.newaxis, :2], b[:, :2])
+    rb = np.minimum(a[:, np.newaxis, 2:], b[:, 2:])
 
-# Get orientation exif tag
-for orientation in ExifTags.TAGS.keys():
-    if ExifTags.TAGS[orientation] == 'Orientation':
-        break
-
-
-def xyxy2xywh(x):
-    # Convert bounding box format from [x1, y1, x2, y2] to [x, y, w, h]
-    y = torch.zeros_like(x) if isinstance(x, torch.Tensor) else np.zeros_like(x)
-    y[:, 0] = (x[:, 0] + x[:, 2]) / 2
-    y[:, 1] = (x[:, 1] + x[:, 3]) / 2
-    y[:, 2] = x[:, 2] - x[:, 0]
-    y[:, 3] = x[:, 3] - x[:, 1]
-    return y
+    area_i = np.prod(rb - lt, axis=2) * (lt < rb).all(axis=2)
+    area_a = np.prod(a[:, 2:] - a[:, :2], axis=1)
+    area_b = np.prod(b[:, 2:] - b[:, :2], axis=1)
+    return area_i / (area_a[:, np.newaxis] + area_b - area_i)
 
 
-def xywh2xyxy(x):
-    # Convert bounding box format from [x, y, w, h] to [x1, y1, x2, y2]
-    y = torch.zeros_like(x) if isinstance(x, torch.Tensor) else np.zeros_like(x)
-    y[:, 0] = x[:, 0] - x[:, 2] / 2
-    y[:, 1] = x[:, 1] - x[:, 3] / 2
-    y[:, 2] = x[:, 0] + x[:, 2] / 2
-    y[:, 3] = x[:, 1] + x[:, 3] / 2
-    return y
+def all_gather(data):
+    """
+    Run all_gather on arbitrary picklable data (not necessarily tensors)
+    Args:
+        data: any picklable object
+    Returns:
+        list[data]: list of data gathered from each rank
+    """
+    world_size = get_world_size()
+    if world_size == 1:
+        return [data]
+
+    # serialized to a Tensor
+    buffer = pickle.dumps(data)
+    storage = torch.ByteStorage.from_buffer(buffer)
+    tensor = torch.ByteTensor(storage).to("cuda")
+
+    # obtain Tensor size of each rank
+    local_size = torch.tensor([tensor.numel()], device="cuda")
+    size_list = [torch.tensor([0], device="cuda") for _ in range(world_size)]
+    dist.all_gather(size_list, local_size)
+    size_list = [int(size.item()) for size in size_list]
+    max_size = max(size_list)
+
+    # receiving Tensor from all ranks
+    # we pad the tensor because torch all_gather does not support
+    # gathering tensors of different shapes
+    tensor_list = []
+    for _ in size_list:
+        tensor_list.append(
+            torch.empty((max_size,), dtype=torch.uint8, device="cuda"),
+        )
+    if local_size != max_size:
+        padding = torch.empty(
+            size=(max_size - local_size,),
+            dtype=torch.uint8,
+            device="cuda",
+        )
+        tensor = torch.cat((tensor, padding), dim=0)
+    dist.all_gather(tensor_list, tensor)
+
+    data_list = []
+    for size, tensor in zip(size_list, tensor_list):
+        buffer = tensor.cpu().numpy().tobytes()[:size]
+        data_list.append(pickle.loads(buffer))
+
+    return data_list
 
 
-def clip_coords(boxes, img_shape):
-    # Clip bounding xyxy bounding boxes to image shape (height, width)
-    boxes[:, [0, 2]] = boxes[:, [0, 2]].clamp(min=0, max=img_shape[1])  # clip x
-    boxes[:, [1, 3]] = boxes[:, [1, 3]].clamp(min=0, max=img_shape[0])  # clip y
+def reduce_dict(input_dict, average=True):
+    """
+    Args:
+        input_dict (dict): all the values will be reduced
+        average (bool): whether to do average or sum
+    Reduce the values in the dictionary from all processes so that all processes
+    have the averaged results. Returns a dict with the same fields as
+    input_dict, after reduction.
+    """
+    world_size = get_world_size()
+    if world_size < 2:
+        return input_dict
+    with torch.no_grad():
+        names = []
+        values = []
+        # sort the keys so that they are consistent across processes
+        for k in sorted(input_dict.keys()):
+            names.append(k)
+            values.append(input_dict[k])
+        values = torch.stack(values, dim=0)
+        dist.all_reduce(values)
+        if average:
+            values /= world_size
+        reduced_dict = {k: v for k, v in zip(names, values)}
+    return reduced_dict
 
 
-def scale_coords(img1_shape, coords, img0_shape):
-    # Rescale coords (xyxy) from img1_shape to img0_shape
-    gain = max(img1_shape) / max(img0_shape)  # gain  = old / new
-    coords[:, [0, 2]] -= (img1_shape[1] - img0_shape[1] * gain) / 2  # x padding
-    coords[:, [1, 3]] -= (img1_shape[0] - img0_shape[0] * gain) / 2  # y padding
-    coords[:, :4] /= gain
-    clip_coords(coords, img0_shape)
-    return coords
+def warmup_lr_scheduler(optimizer, warmup_iters, warmup_factor):
+
+    def f(x):
+        if x >= warmup_iters:
+            return 1
+        alpha = float(x) / warmup_iters
+        return warmup_factor * (1 - alpha) + alpha
+
+    return torch.optim.lr_scheduler.LambdaLR(optimizer, f)
 
 
-def apply_classifier(x, model, img, im0):
-    # applies a second stage classifier to yolo outputs
-
-    for i, d in enumerate(x):  # per image
-        if d is not None and len(d):
-            d = d.clone()
-
-            # Reshape and pad cutouts
-            b = xyxy2xywh(d[:, :4])  # boxes
-            b[:, 2:] = b[:, 2:].max(1)[0].unsqueeze(1)  # rectangle to square
-            b[:, 2:] = b[:, 2:] * 1.3 + 30  # pad
-            d[:, :4] = xywh2xyxy(b).long()
-
-            # Rescale boxes from img_size to im0 size
-            scale_coords(img.shape[2:], d[:, :4], im0.shape)
-
-            # Classes
-            pred_cls1 = d[:, 6].long()
-            ims = []
-            for j, a in enumerate(d):  # per item
-                cutout = im0[int(a[1]):int(a[3]), int(a[0]):int(a[2])]
-                im = cv2.resize(cutout, (224, 224))  # BGR
-                # cv2.imwrite('test%i.jpg' % j, cutout)
-
-                im = im[:, :, ::-1].transpose(2, 0, 1)  # BGR to RGB, to 3x416x416
-                im = np.ascontiguousarray(im, dtype=np.float32)  # uint8 to float32
-                im /= 255.0  # 0 - 255 to 0.0 - 1.0
-                ims.append(im)
-
-            pred_cls2 = model(torch.Tensor(ims).to(d.device)).argmax(1)  # classifier prediction
-            x[i] = x[i][pred_cls1 == pred_cls2]  # retain matching class detections
-
-    return x
-
-
-def plot_test_txt():  # from utils.utils import *; plot_test()
-    # Plot test.txt histograms
-    x = np.loadtxt('test.txt', dtype=np.float32)
-    box = xyxy2xywh(x[:, :4])
-    cx, cy = box[:, 0], box[:, 1]
-
-    fig, ax = plt.subplots(1, 1, figsize=(6, 6))
-    ax.hist2d(cx, cy, bins=600, cmax=10, cmin=0)
-    ax.set_aspect('equal')
-    fig.tight_layout()
-    plt.savefig('hist2d.jpg', dpi=300)
-
-    fig, ax = plt.subplots(1, 2, figsize=(12, 6))
-    ax[0].hist(cx, bins=600)
-    ax[1].hist(cy, bins=600)
-    fig.tight_layout()
-    plt.savefig('hist1d.jpg', dpi=200)
-
-
-def plot_images(imgs, targets, paths=None, fname='images.jpg'):
-    # Plots training images overlaid with targets
-    imgs = imgs.cpu().numpy()
-    targets = targets.cpu().numpy()
-    # targets = targets[targets[:, 1] == 21]  # plot only one class
-
-    fig = plt.figure(figsize=(10, 10))
-    bs, _, h, w = imgs.shape  # batch size, _, height, width
-    bs = min(bs, 16)  # limit plot to 16 images
-    ns = np.ceil(bs ** 0.5)  # number of subplots
-
-    for i in range(bs):
-        boxes = xywh2xyxy(targets[targets[:, 0] == i, 2:6]).T
-        boxes[[0, 2]] *= w
-        boxes[[1, 3]] *= h
-        plt.subplot(ns, ns, i + 1).imshow(imgs[i].transpose(1, 2, 0))
-        plt.plot(boxes[[0, 2, 2, 0, 0]], boxes[[1, 1, 3, 3, 1]], '.-')
-        plt.axis('off')
-        if paths is not None:
-            s = Path(paths[i]).name
-            plt.title(s[:min(len(s), 40)], fontdict={'size': 8})  # limit to 40 characters
-    fig.tight_layout()
-    fig.savefig(fname, dpi=200)
-    plt.close()
-
-
-def exif_size(img):
-    # Returns exif-corrected PIL size
-    s = img.size  # (width, height)
+def mkdir(path):
     try:
-        rotation = dict(img._getexif().items())[orientation]
-        if rotation == 6:  # rotation 270
-            s = (s[1], s[0])
-        elif rotation == 8:  # rotation 90
-            s = (s[1], s[0])
-    except:
-        pass
-
-    return s
+        os.makedirs(path)
+    except OSError as e:
+        if e.errno != errno.EEXIST:
+            raise
 
 
-def load_image(self, index):
-    # loads 1 image from dataset
-    img = self.imgs[index]
-    if img is None:
-        img_path = self.img_files[index]
-        img = cv2.imread(img_path)  # BGR
-        assert img is not None, 'Image Not Found ' + img_path
-        r = self.img_size / max(img.shape)  # size ratio
-        if self.augment:  # if training (NOT testing), downsize to inference shape
-            h, w = img.shape[:2]
-            img = cv2.resize(img, (int(w * r), int(h * r)), interpolation=cv2.INTER_LINEAR)  # _LINEAR fastest
-    return img
+def setup_for_distributed(is_master):
+    """
+    This function disables printing when not in master process
+    """
+    import builtins as __builtin__
+    builtin_print = __builtin__.print
+
+    def print(*args, **kwargs):
+        force = kwargs.pop('force', False)
+        if is_master or force:
+            builtin_print(*args, **kwargs)
+
+    __builtin__.print = print
 
 
-def augment_hsv(img, hgain=0.5, sgain=0.5, vgain=0.5):
-    x = (np.random.uniform(-1, 1, 3) * np.array([hgain, sgain, vgain]) + 1).astype(np.float32)  # random gains
-    img_hsv = (cv2.cvtColor(img, cv2.COLOR_BGR2HSV) * x.reshape((1, 1, 3))).clip(None, 255).astype(np.uint8)
-    cv2.cvtColor(img_hsv, cv2.COLOR_HSV2BGR, dst=img)  # no return needed
+def is_dist_avail_and_initialized():
+    if not dist.is_available():
+        return False
+    if not dist.is_initialized():
+        return False
+    return True
 
 
-# def augment_hsv(img, hgain=0.5, sgain=0.5, vgain=0.5):  # original version
-#     # SV augmentation by 50%
-#     img_hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)  # hue, sat, val
-#
-#     S = img_hsv[:, :, 1].astype(np.float32)  # saturation
-#     V = img_hsv[:, :, 2].astype(np.float32)  # value
-#
-#     a = random.uniform(-1, 1) * sgain + 1
-#     b = random.uniform(-1, 1) * vgain + 1
-#     S *= a
-#     V *= b
-#
-#     img_hsv[:, :, 1] = S if a < 1 else S.clip(None, 255)
-#     img_hsv[:, :, 2] = V if b < 1 else V.clip(None, 255)
-#     cv2.cvtColor(img_hsv, cv2.COLOR_HSV2BGR, dst=img)  # no return needed
+def get_world_size():
+    if not is_dist_avail_and_initialized():
+        return 1
+    return dist.get_world_size()
 
 
-def load_mosaic(self, index):
-    # loads images in a mosaic
-
-    labels4 = []
-    s = self.img_size
-    xc, yc = [int(random.uniform(s * 0.5, s * 1.5)) for _ in range(2)]  # mosaic center x, y
-    img4 = np.zeros((s * 2, s * 2, 3), dtype=np.uint8) + 128  # base image with 4 tiles
-    indices = [index] + [random.randint(0, len(self.labels) - 1) for _ in range(3)]  # 3 additional image indices
-    for i, index in enumerate(indices):
-        # Load image
-        img = load_image(self, index)
-        h, w, _ = img.shape
-
-        # place img in img4
-        if i == 0:  # top left
-            x1a, y1a, x2a, y2a = max(xc - w, 0), max(yc - h, 0), xc, yc  # xmin, ymin, xmax, ymax (large image)
-            x1b, y1b, x2b, y2b = w - (x2a - x1a), h - (y2a - y1a), w, h  # xmin, ymin, xmax, ymax (small image)
-        elif i == 1:  # top right
-            x1a, y1a, x2a, y2a = xc, max(yc - h, 0), min(xc + w, s * 2), yc
-            x1b, y1b, x2b, y2b = 0, h - (y2a - y1a), min(w, x2a - x1a), h
-        elif i == 2:  # bottom left
-            x1a, y1a, x2a, y2a = max(xc - w, 0), yc, xc, min(s * 2, yc + h)
-            x1b, y1b, x2b, y2b = w - (x2a - x1a), 0, max(xc, w), min(y2a - y1a, h)
-        elif i == 3:  # bottom right
-            x1a, y1a, x2a, y2a = xc, yc, min(xc + w, s * 2), min(s * 2, yc + h)
-            x1b, y1b, x2b, y2b = 0, 0, min(w, x2a - x1a), min(y2a - y1a, h)
-
-        img4[y1a:y2a, x1a:x2a] = img[y1b:y2b, x1b:x2b]  # img4[ymin:ymax, xmin:xmax]
-        padw = x1a - x1b
-        padh = y1a - y1b
-
-        # Load labels
-        label_path = self.label_files[index]
-        if os.path.isfile(label_path):
-            x = self.labels[index]
-            if x is None:  # labels not preloaded
-                with open(label_path, 'r') as f:
-                    x = np.array([x.split() for x in f.read().splitlines()], dtype=np.float32)
-
-            if x.size > 0:
-                # Normalized xywh to pixel xyxy format
-                labels = x.copy()
-                labels[:, 1] = w * (x[:, 1] - x[:, 3] / 2) + padw
-                labels[:, 2] = h * (x[:, 2] - x[:, 4] / 2) + padh
-                labels[:, 3] = w * (x[:, 1] + x[:, 3] / 2) + padw
-                labels[:, 4] = h * (x[:, 2] + x[:, 4] / 2) + padh
-            else:
-                labels = np.zeros((0, 5), dtype=np.float32)
-            labels4.append(labels)
-
-    if len(labels4):
-        labels4 = np.concatenate(labels4, 0)
-
-    # hyp = self.hyp
-    # img4, labels4 = random_affine(img4, labels4,
-    #                               degrees=hyp['degrees'],
-    #                               translate=hyp['translate'],
-    #                               scale=hyp['scale'],
-    #                               shear=hyp['shear'])
-
-    # Center crop
-    a = s // 2
-    img4 = img4[a:a + s, a:a + s]
-    if len(labels4):
-        labels4[:, 1:] -= a
-
-    return img4, labels4
+def get_rank():
+    if not is_dist_avail_and_initialized():
+        return 0
+    return dist.get_rank()
 
 
-def letterbox(img, new_shape=416, color=(128, 128, 128), mode='auto', interp=cv2.INTER_AREA):
-    # Resize a rectangular image to a 32 pixel multiple rectangle
-    # https://github.com/ultralytics/yolov3/issues/232
-    shape = img.shape[:2]  # current shape [height, width]
+def is_main_process():
+    return get_rank() == 0
 
-    if isinstance(new_shape, int):
-        r = float(new_shape) / max(shape)  # ratio  = new / old
+
+def save_on_master(*args, **kwargs):
+    if is_main_process():
+        torch.save(*args, **kwargs)
+
+
+def init_distributed_mode(args):
+    if 'RANK' in os.environ and 'WORLD_SIZE' in os.environ:
+        args.rank = int(os.environ["RANK"])
+        args.world_size = int(os.environ['WORLD_SIZE'])
+        args.gpu = int(os.environ['LOCAL_RANK'])
+    elif 'SLURM_PROCID' in os.environ:
+        args.rank = int(os.environ['SLURM_PROCID'])
+        args.gpu = args.rank % torch.cuda.device_count()
     else:
-        r = max(new_shape) / max(shape)
-    ratio = r, r  # width, height ratios
-    new_unpad = (int(round(shape[1] * r)), int(round(shape[0] * r)))
+        print('Not using distributed mode')
+        args.distributed = False
+        return
 
-    # Compute padding https://github.com/ultralytics/yolov3/issues/232
-    if mode == 'auto':  # minimum rectangle
-        dw = np.mod(new_shape - new_unpad[0], 32) / 2  # width padding
-        dh = np.mod(new_shape - new_unpad[1], 32) / 2  # height padding
-    elif mode == 'square':  # square
-        dw = (new_shape - new_unpad[0]) / 2  # width padding
-        dh = (new_shape - new_unpad[1]) / 2  # height padding
-    elif mode == 'rect':  # square
-        dw = (new_shape[1] - new_unpad[0]) / 2  # width padding
-        dh = (new_shape[0] - new_unpad[1]) / 2  # height padding
-    elif mode == 'scaleFill':
-        dw, dh = 0.0, 0.0
-        new_unpad = (new_shape, new_shape)
-        ratio = new_shape / shape[1], new_shape / shape[0]  # width, height ratios
+    args.distributed = True
 
-    if shape[::-1] != new_unpad:  # resize
-        img = cv2.resize(img, new_unpad, interpolation=interp)  # INTER_AREA is better, INTER_LINEAR is faster
-    top, bottom = int(round(dh - 0.1)), int(round(dh + 0.1))
-    left, right = int(round(dw - 0.1)), int(round(dw + 0.1))
-    img = cv2.copyMakeBorder(img, top, bottom, left, right, cv2.BORDER_CONSTANT, value=color)  # add border
-    return img, ratio, dw, dh
-
-
-def random_affine(img, targets=(), degrees=10, translate=.1, scale=.1, shear=10):
-    # torchvision.transforms.RandomAffine(degrees=(-10, 10), translate=(.1, .1), scale=(.9, 1.1), shear=(-10, 10))
-    # https://medium.com/uruvideo/dataset-augmentation-with-random-homographies-a8f4b44830d4
-
-    if targets is None:  # targets = [cls, xyxy]
-        targets = []
-    border = 0  # width of added border (optional)
-    height = img.shape[0] + border * 2
-    width = img.shape[1] + border * 2
-
-    # Rotation and Scale
-    R = np.eye(3)
-    a = random.uniform(-degrees, degrees)
-    # a += random.choice([-180, -90, 0, 90])  # add 90deg rotations to small rotations
-    s = random.uniform(1 - scale, 1 + scale)
-    R[:2] = cv2.getRotationMatrix2D(angle=a, center=(img.shape[1] / 2, img.shape[0] / 2), scale=s)
-
-    # Translation
-    T = np.eye(3)
-    T[0, 2] = random.uniform(-translate, translate) * img.shape[0] + border  # x translation (pixels)
-    T[1, 2] = random.uniform(-translate, translate) * img.shape[1] + border  # y translation (pixels)
-
-    # Shear
-    S = np.eye(3)
-    S[0, 1] = math.tan(random.uniform(-shear, shear) * math.pi / 180)  # x shear (deg)
-    S[1, 0] = math.tan(random.uniform(-shear, shear) * math.pi / 180)  # y shear (deg)
-
-    # Combined rotation matrix
-    M = S @ T @ R  # ORDER IS IMPORTANT HERE!!
-    changed = (border != 0) or (M != np.eye(3)).any()
-    if changed:
-        img = cv2.warpAffine(img, M[:2], dsize=(width, height), flags=cv2.INTER_AREA, borderValue=(128, 128, 128))
-
-    # Transform label coordinates
-    n = len(targets)
-    if n:
-        # warp points
-        xy = np.ones((n * 4, 3))
-        xy[:, :2] = targets[:, [1, 2, 3, 4, 1, 4, 3, 2]].reshape(n * 4, 2)  # x1y1, x2y2, x1y2, x2y1
-        xy = (xy @ M.T)[:, :2].reshape(n, 8)
-
-        # create new boxes
-        x = xy[:, [0, 2, 4, 6]]
-        y = xy[:, [1, 3, 5, 7]]
-        xy = np.concatenate((x.min(1), y.min(1), x.max(1), y.max(1))).reshape(4, n).T
-
-        # # apply angle-based reduction of bounding boxes
-        # radians = a * math.pi / 180
-        # reduction = max(abs(math.sin(radians)), abs(math.cos(radians))) ** 0.5
-        # x = (xy[:, 2] + xy[:, 0]) / 2
-        # y = (xy[:, 3] + xy[:, 1]) / 2
-        # w = (xy[:, 2] - xy[:, 0]) * reduction
-        # h = (xy[:, 3] - xy[:, 1]) * reduction
-        # xy = np.concatenate((x - w / 2, y - h / 2, x + w / 2, y + h / 2)).reshape(4, n).T
-
-        # reject warped points outside of image
-        xy[:, [0, 2]] = xy[:, [0, 2]].clip(0, width)
-        xy[:, [1, 3]] = xy[:, [1, 3]].clip(0, height)
-        w = xy[:, 2] - xy[:, 0]
-        h = xy[:, 3] - xy[:, 1]
-        area = w * h
-        area0 = (targets[:, 3] - targets[:, 1]) * (targets[:, 4] - targets[:, 2])
-        ar = np.maximum(w / (h + 1e-16), h / (w + 1e-16))
-        i = (w > 4) & (h > 4) & (area / (area0 + 1e-16) > 0.1) & (ar < 10)
-
-        targets = targets[i]
-        targets[:, 1:5] = xy[i]
-
-    return img, targets
-
-
-def cutout(image, labels):
-    # https://arxiv.org/abs/1708.04552
-    # https://github.com/hysts/pytorch_cutout/blob/master/dataloader.py
-    # https://towardsdatascience.com/when-conventional-wisdom-fails-revisiting-data-augmentation-for-self-driving-cars-4831998c5509
-    h, w = image.shape[:2]
-
-    def bbox_ioa(box1, box2, x1y1x2y2=True):
-        # Returns the intersection over box2 area given box1, box2. box1 is 4, box2 is nx4. boxes are x1y1x2y2
-        box2 = box2.transpose()
-
-        # Get the coordinates of bounding boxes
-        b1_x1, b1_y1, b1_x2, b1_y2 = box1[0], box1[1], box1[2], box1[3]
-        b2_x1, b2_y1, b2_x2, b2_y2 = box2[0], box2[1], box2[2], box2[3]
-
-        # Intersection area
-        inter_area = (np.minimum(b1_x2, b2_x2) - np.maximum(b1_x1, b2_x1)).clip(0) * \
-                     (np.minimum(b1_y2, b2_y2) - np.maximum(b1_y1, b2_y1)).clip(0)
-
-        # box2 area
-        box2_area = (b2_x2 - b2_x1) * (b2_y2 - b2_y1) + 1e-16
-
-        # Intersection over box2 area
-        return inter_area / box2_area
-
-    # create random masks
-    scales = [0.5] * 1  # + [0.25] * 4 + [0.125] * 16 + [0.0625] * 64 + [0.03125] * 256  # image size fraction
-    for s in scales:
-        mask_h = random.randint(1, int(h * s))
-        mask_w = random.randint(1, int(w * s))
-
-        # box
-        xmin = max(0, random.randint(0, w) - mask_w // 2)
-        ymin = max(0, random.randint(0, h) - mask_h // 2)
-        xmax = min(w, xmin + mask_w)
-        ymax = min(h, ymin + mask_h)
-
-        # apply random color mask
-        mask_color = [random.randint(0, 255) for _ in range(3)]
-        image[ymin:ymax, xmin:xmax] = mask_color
-
-        # return unobscured labels
-        if len(labels) and s > 0.03:
-            box = np.array([xmin, ymin, xmax, ymax], dtype=np.float32)
-            ioa = bbox_ioa(box, labels[:, 1:5])  # intersection over area
-            labels = labels[ioa < 0.90]  # remove >90% obscured labels
-
-    return labels
-
-
-def reduce_img_size(path='../data/sm3/images', img_size=1024):  # from utils.datasets import *; reduce_img_size()
-    # creates a new ./images_reduced folder with reduced size images of maximum size img_size
-    path_new = path + '_reduced'  # reduced images path
-    create_folder(path_new)
-    for f in tqdm(glob.glob('%s/*.*' % path)):
-        if os.path.isfile(f):
-            img = cv2.imread(f)
-            h, w = img.shape[:2]
-            r = img_size / max(h, w)  # size ratio
-            if r < 1.0:
-                img = cv2.resize(img, (int(w * r), int(h * r)), interpolation=cv2.INTER_AREA)  # _LINEAR fastest
-            cv2.imwrite(f.replace(path, path_new), img)
-        else:
-            print('WARNING: image failure %s' % f)
-
-
-def convert_images2bmp():
-    # cv2.imread() jpg at 230 img/s, *.bmp at 400 img/s
-    for path in ['../coco/images/val2014/', '../coco/images/train2014/']:
-        folder = os.sep + Path(path).name
-        output = path.replace(folder, folder + 'bmp')
-        create_folder(output)
-
-        for f in tqdm(glob.glob('%s*.jpg' % path)):
-            save_name = f.replace('.jpg', '.bmp').replace(folder, folder + 'bmp')
-            cv2.imwrite(save_name, cv2.imread(f))
-
-    for label_path in ['../coco/trainvalno5k.txt', '../coco/5k.txt']:
-        with open(label_path, 'r') as file:
-            lines = file.read()
-        lines = lines.replace('2014/', '2014bmp/').replace('.jpg', '.bmp').replace(
-            '/Users/glennjocher/PycharmProjects/', '../')
-        with open(label_path.replace('5k', '5k_bmp'), 'w') as file:
-            file.write(lines)
-
-
-def imagelist2folder(path='../data/sm3/out_test.txt'):  # from utils.datasets import *; imagelist2folder()
-    # Copies all the images in a text file (list of images) into a folder
-    create_folder(path[:-4])
-    with open(path, 'r') as f:
-        for line in f.read().splitlines():
-            os.system('cp "%s" %s' % (line, path[:-4]))
-            print(line)
-
-
-def create_folder(path='./new_folder'):
-    # Create folder
-    if os.path.exists(path):
-        shutil.rmtree(path)  # delete output folder
-    os.makedirs(path)  # make new output folder
+    torch.cuda.set_device(args.gpu)
+    args.dist_backend = 'nccl'
+    print('| distributed init (rank {}): {}'.format(
+        args.rank, args.dist_url), flush=True,
+    )
+    torch.distributed.init_process_group(
+        backend=args.dist_backend, init_method=args.dist_url,
+        world_size=args.world_size, rank=args.rank,
+    )
+    torch.distributed.barrier()
+    setup_for_distributed(args.rank == 0)

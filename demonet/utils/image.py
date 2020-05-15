@@ -1,7 +1,28 @@
+import numpy as np
 import cv2
 
 from IPython import display
 from PIL import Image
+
+
+def image_transform(
+    image_name,
+    input_shape=(304, 304),
+    mean=None,
+    std=None,
+):
+    image = cv2.imread(image_name).astype(np.float32)  # uint8 to float32
+    image = cv2.resize(image, input_shape, interpolation=cv2.INTER_CUBIC)
+    # Normalization
+    if mean is not None:
+        mean = np.array(mean, dtype=np.float32)  # BGR
+        image -= mean
+    if std is not None:
+        std = np.array(std, dtype=np.float32)  # BGR
+        image /= std
+    image = image.transpose([2, 0, 1])  # change to C x H x W
+
+    return image
 
 
 def cv2_imshow(a):
