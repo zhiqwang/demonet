@@ -16,7 +16,7 @@ class ConvertCocoPolysToMask(object):
         height, width = image.shape[:2]
 
         image_id = target["image_id"]
-        image_id = np.array([image_id])
+        image_id = np.asarray([image_id])
         image_shape = target["image_shape"]
 
         anno = target["annotations"]
@@ -32,7 +32,7 @@ class ConvertCocoPolysToMask(object):
         boxes[:, 1::2] = np.clip(boxes[:, 1::2], 0, height)
 
         classes = [obj["category_id"] for obj in anno]
-        classes = np.array(classes, dtype=np.int64)
+        classes = np.asarray(classes, dtype=np.int64)
 
         masks = None
         if len(anno[0]["segmentation"]) > 0:

@@ -32,7 +32,7 @@ def get_coco(
 
     if transforms is not None:
         t.append(transforms)
-    transforms = Compose(t)
+    transforms = T.Compose(t)
 
     img_folder, ann_file = PATHS[image_set]
     img_folder = os.path.join(root, img_folder)
@@ -71,16 +71,25 @@ def get_voc(
 
 def get_dataset(
     name, image_set, transform, data_path,
-    mode='instance', year=2017,
+    mode='instances', year=2017,
 ):
 
-    dataset = get_coco(
-        data_path,
-        image_set=image_set,
-        transforms=transform,
-        mode=mode,
-        year=year,
-    )
+    if name == 'coco':
+        dataset = get_coco(
+            data_path,
+            image_set=image_set,
+            transforms=transform,
+            mode=mode,
+            year=year,
+        )
+    elif name == 'voc':
+        dataset = get_voc(
+            data_path,
+            image_set=image_set,
+            transforms=transform,
+        )
+    else:
+        raise NotImplementedError
 
     return dataset
 
@@ -100,7 +109,7 @@ def get_transform(
 
     transforms.append(T.Normalize(bgr_mean, bgr_std))
     transforms.append(T.ToTensor())
-    return Compose(transforms)
+    return T.Compose(transforms)
 
 
 def collate_train(batch):
@@ -133,13 +142,3 @@ def collate_eval(batch):
     images = torch.stack(images, 0)
 
     return images, targets
-
-
-class Compose(object):
-    def __init__(self, transforms):
-        self.transforms = transforms
-
-    def __call__(self, image, target):
-        for t in self.transforms:
-            image, target = t(image, target)
-        return image, target
