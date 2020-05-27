@@ -42,19 +42,19 @@ def main(args):
     print("Loading data")
     dataset = get_dataset(
         args.dataset,
-        "train",
+        args.train_set,
         get_transform(is_train=True, bgr_mean=args.bgr_mean, bgr_std=args.bgr_std),
         args.data_path,
         mode=args.dataset_mode,
-        year=args.dataset_year,
+        years=args.dataset_year,
     )
     dataset_test = get_dataset(
         args.dataset,
-        "val",
+        args.val_set,
         get_transform(is_train=False, bgr_mean=args.bgr_mean, bgr_std=args.bgr_std),
         args.data_path,
         mode=args.dataset_mode,
-        year=args.dataset_year,
+        years=args.dataset_year,
     )
 
     print("Creating data loaders")
@@ -164,8 +164,12 @@ if __name__ == "__main__":
                         help='dataset')
     parser.add_argument('--dataset-mode', default='instances',
                         help='dataset mode')
-    parser.add_argument('--dataset-year', default=2017,
+    parser.add_argument('--dataset-year', nargs='+', default=['2017'],
                         help='dataset year')
+    parser.add_argument('--train-set', default='train',
+                        help='set of train')
+    parser.add_argument('--val-set', default='val',
+                        help='set of val')
     parser.add_argument('--bgr-mean', type=int, nargs='+',
                         help='mean')
     parser.add_argument('--bgr-std', type=int, nargs='+',

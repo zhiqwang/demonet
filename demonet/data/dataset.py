@@ -1,6 +1,7 @@
 import os
 
 import torch
+from torch.utils.data import ConcatDataset
 
 from .coco_utils import (
     _coco_remove_images_without_annotations,
@@ -15,8 +16,8 @@ def get_coco(
     root,
     image_set,
     transforms,
+    year='2017',
     mode='instances',
-    year=2017,
 ):
     anno_file_template = "{}_{}{}.json"
     PATHS = {
@@ -52,6 +53,7 @@ def get_voc(
     root,
     image_set,
     transforms,
+    year='2012',
 ):
     t = [ConvertVOCtoCOCO()]
 
@@ -61,7 +63,7 @@ def get_voc(
 
     dataset = VOCDetection(
         img_folder=root,
-        year='2007',
+        year=year,
         image_set=image_set,
         transforms=transforms,
     )
@@ -71,27 +73,35 @@ def get_voc(
 
 def get_dataset(
     name, image_set, transform, data_path,
-    mode='instances', year=2017,
+    mode='instances', years=['2017'],
 ):
+    datasets = []
 
-    if name == 'coco':
-        dataset = get_coco(
-            data_path,
-            image_set=image_set,
-            transforms=transform,
-            mode=mode,
-            year=year,
-        )
-    elif name == 'voc':
-        dataset = get_voc(
-            data_path,
-            image_set=image_set,
-            transforms=transform,
-        )
+    for year in years:
+        if name == 'coco':
+            dataset = get_coco(
+                data_path,
+                image_set=image_set,
+                transforms=transform,
+                year=year,
+                mode=mode,
+            )
+        elif name == 'voc':
+            dataset = get_voc(
+                data_path,
+                image_set=image_set,
+                transforms=transform,
+                year=year,
+            )
+        else:
+            raise NotImplementedError
+
+        datasets.append(dataset)
+
+    if len(datasets) == 1:
+        return datasets[0]
     else:
-        raise NotImplementedError
-
-    return dataset
+        return ConcatDataset(datasets)
 
 
 def get_transform(
