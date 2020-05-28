@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from ..box_heads.multibox_head import MultiBoxHeads
+from .box_heads.multibox_head import MultiBoxHeads
 
 
 model_urls = {

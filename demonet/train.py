@@ -29,7 +29,7 @@ from .utils.distribute import init_distributed_mode, save_on_master, mkdir
 
 from .engine import train_one_epoch, evaluate
 
-from .modeling.backbone.vgg import build_model
+from .modeling.ssd import build_model
 
 
 def main(args):
