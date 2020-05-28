@@ -8,6 +8,10 @@ Currently work in process, very pleasure for suggestion and cooperation.
 
 ```sh
 CUDA_VISIBLE_DEVICES=[GPU_ID] python -m demonet.train \
+    --dataset voc \
+    --train-set trainval \
+    --val-set test \
+    --dataset-year 2007 2012 \
     --data-path [DATA_PATH] \
     --output-dir [CHECKPOINT_PATH] \
     --epochs [NUM_EPOCHS] \
