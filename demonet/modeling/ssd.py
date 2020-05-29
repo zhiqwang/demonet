@@ -135,7 +135,7 @@ def vgg(cfg, i, batch_norm=False):
     return layers
 
 
-def add_extras(cfg, i, batch_norm=False):
+def build_extras(cfg, i, batch_norm=False):
     # Extra layers added to VGG for feature scaling
     layers = []
     in_channels = i
@@ -155,7 +155,7 @@ def add_extras(cfg, i, batch_norm=False):
     return layers
 
 
-def multibox(vgg, extra_layers, cfg, num_classes):
+def build_multibox(vgg, extra_layers, cfg, num_classes):
     loc_layers = []
     conf_layers = []
     vgg_source = [21, -2]
@@ -190,16 +190,16 @@ mbox = {
 }
 
 
-def build_model(size=300, num_classes=21, **kwargs):
+def build(size=300, num_classes=21, **kwargs):
     if size != 300:
         raise NotImplementedError(
             "You specified size [{}]. However, currently only "
             "SSD300 (size=300) is supported!".format(size),
         )
 
-    base_layers, extras_layers, head_layers = multibox(
+    base_layers, extras_layers, head_layers = build_multibox(
         vgg(base[str(size)], 3),
-        add_extras(extras[str(size)], 1024),
+        build_extras(extras[str(size)], 1024),
         mbox[str(size)],
         num_classes,
     )
