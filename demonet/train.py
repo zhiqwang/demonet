@@ -25,7 +25,7 @@ from .utils.distribute import init_distributed_mode, save_on_master, mkdir
 
 from .engine import train_one_epoch, evaluate
 
-from .modeling import build_model
+from .models import build_model
 
 
 def main(args):

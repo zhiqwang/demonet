@@ -1,7 +1,7 @@
 import cv2
 import torch
 
-from .modeling.backbone.vgg import build_model
+from .models.backbone.vgg import build_model
 from .utils.image import image_transform
 from .utils.overlay import overlay_boxes, overlay_class_names
 
