@@ -6,7 +6,6 @@ import torch
 
 import torchvision.models
 
-from .data.coco_utils import get_coco_api_from_dataset
 from .data.coco_eval import CocoEvaluator
 
 from .utils.distribute import warmup_lr_scheduler, reduce_dict
@@ -72,7 +71,7 @@ def _get_iou_types(model):
 
 
 @torch.no_grad()
-def evaluate(model, data_loader, device):
+def evaluate(model, data_loader, base_ds, device):
     n_threads = torch.get_num_threads()
     # FIXME remove this and make paste_masks_in_image run on the GPU
     torch.set_num_threads(1)
@@ -81,9 +80,8 @@ def evaluate(model, data_loader, device):
     metric_logger = MetricLogger(delimiter="  ")
     header = 'Test:'
 
-    coco = get_coco_api_from_dataset(data_loader.dataset)
     iou_types = _get_iou_types(model)
-    coco_evaluator = CocoEvaluator(coco, iou_types)
+    coco_evaluator = CocoEvaluator(base_ds, iou_types)
 
     for images, targets in metric_logger.log_every(data_loader, 100, header):
         images = images.to(device)

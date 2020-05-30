@@ -1,14 +1,259 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
-# Modified by Feng Wang and Zhiqiang Wang.
-
+"""
+Transforms and data augmentation for both image + bbox.
+"""
 import random
 
-import numpy as np
-import cv2
-
+import PIL
 import torch
+import torchvision.transforms as T
+import torchvision.transforms.functional as F
 
-from fvcore.transforms.transform import Transform
+from .utils import interpolate
+
+
+def crop(image, target, region):
+    cropped_image = F.crop(image, *region)
+
+    target = target.copy()
+    i, j, h, w = region
+
+    # should we do something wrt the original size?
+    target["size"] = torch.tensor([h, w])
+
+    fields = ["labels", "area"]
+
+    if "boxes" in target:
+        boxes = target["boxes"]
+        max_size = torch.as_tensor([w, h], dtype=torch.float32)
+        cropped_boxes = boxes - torch.as_tensor([j, i, j, i])
+        cropped_boxes = torch.min(cropped_boxes.reshape(-1, 2, 2), max_size)
+        cropped_boxes = cropped_boxes.clamp(min=0)
+        area = (cropped_boxes[:, 1, :] - cropped_boxes[:, 0, :]).prod(dim=1)
+        target["boxes"] = cropped_boxes.reshape(-1, 4)
+        target["area"] = area
+        fields.append("boxes")
+
+    if "masks" in target:
+        # FIXME should we update the area here if there are no boxes?
+        target['masks'] = target['masks'][:, i:i + h, j:j + w]
+        fields.append("masks")
+
+    # remove elements for which the boxes or masks that have zero area
+    if "boxes" in target or "masks" in target:
+        # favor boxes selection when defining which elements to keep
+        # this is compatible with previous implementation
+        if "boxes" in target:
+            cropped_boxes = target['boxes'].reshape(-1, 2, 2)
+            keep = torch.all(cropped_boxes[:, 1, :] > cropped_boxes[:, 0, :], dim=1)
+        else:
+            keep = target['masks'].flatten(1).any(1)
+
+        for field in fields:
+            target[field] = target[field][keep]
+
+    return cropped_image, target
+
+
+def hflip(image, target):
+    flipped_image = F.hflip(image)
+
+    w, h = image.size
+
+    target = target.copy()
+    if "boxes" in target:
+        boxes = target["boxes"]
+        boxes = boxes[:, [2, 1, 0, 3]] * torch.as_tensor([-1, 1, -1, 1]) + torch.as_tensor([w, 0, w, 0])
+        target["boxes"] = boxes
+
+    if "masks" in target:
+        target['masks'] = target['masks'].flip(-1)
+
+    return flipped_image, target
+
+
+def resize(image, target, size, max_size=None):
+    # size can be min_size (scalar) or (w, h) tuple
+
+    def get_size_with_aspect_ratio(image_size, size, max_size=None):
+        w, h = image_size
+        if max_size is not None:
+            min_original_size = float(min((w, h)))
+            max_original_size = float(max((w, h)))
+            if max_original_size / min_original_size * size > max_size:
+                size = int(round(max_size * min_original_size / max_original_size))
+
+        if (w <= h and w == size) or (h <= w and h == size):
+            return (h, w)
+
+        if w < h:
+            ow = size
+            oh = int(size * h / w)
+        else:
+            oh = size
+            ow = int(size * w / h)
+
+        return (oh, ow)
+
+    def get_size(image_size, size, max_size=None):
+        if isinstance(size, (list, tuple)):
+            return size[::-1]
+        else:
+            return get_size_with_aspect_ratio(image_size, size, max_size)
+
+    size = get_size(image.size, size, max_size)
+    rescaled_image = F.resize(image, size)
+
+    if target is None:
+        return rescaled_image, None
+
+    ratios = tuple(float(s) / float(s_orig) for s, s_orig in zip(rescaled_image.size, image.size))
+    ratio_width, ratio_height = ratios
+
+    target = target.copy()
+    if "boxes" in target:
+        boxes = target["boxes"]
+        scaled_boxes = boxes * torch.as_tensor([ratio_width, ratio_height, ratio_width, ratio_height])
+        target["boxes"] = scaled_boxes
+
+    if "area" in target:
+        area = target["area"]
+        scaled_area = area * (ratio_width * ratio_height)
+        target["area"] = scaled_area
+
+    h, w = size
+    target["size"] = torch.tensor([h, w])
+
+    if "masks" in target:
+        target['masks'] = interpolate(
+            target['masks'][:, None].float(), size, mode="nearest")[:, 0] > 0.5
+
+    return rescaled_image, target
+
+
+def pad(image, target, padding):
+    # assumes that we only pad on the bottom right corners
+    padded_image = F.pad(image, (0, 0, padding[0], padding[1]))
+    if target is None:
+        return padded_image, None
+    target = target.copy()
+    # should we do something wrt the original size?
+    target["size"] = torch.tensor(padded_image[::-1])
+    if "masks" in target:
+        target['masks'] = torch.nn.functional.pad(target['masks'], (0, padding[0], 0, padding[1]))
+    return padded_image, target
+
+
+class RandomCrop(object):
+    def __init__(self, size):
+        self.size = size
+
+    def __call__(self, img, target):
+        region = T.RandomCrop.get_params(img, self.size)
+        return crop(img, target, region)
+
+
+class RandomSizeCrop(object):
+    def __init__(self, min_size: int, max_size: int):
+        self.min_size = min_size
+        self.max_size = max_size
+
+    def __call__(self, img: PIL.Image.Image, target: dict):
+        w = random.randint(self.min_size, min(img.width, self.max_size))
+        h = random.randint(self.min_size, min(img.height, self.max_size))
+        region = T.RandomCrop.get_params(img, [h, w])
+        return crop(img, target, region)
+
+
+class CenterCrop(object):
+    def __init__(self, size):
+        self.size = size
+
+    def __call__(self, img, target):
+        image_width, image_height = img.size
+        crop_height, crop_width = self.size
+        crop_top = int(round((image_height - crop_height) / 2.))
+        crop_left = int(round((image_width - crop_width) / 2.))
+        return crop(img, target, (crop_top, crop_left, crop_height, crop_width))
+
+
+class RandomHorizontalFlip(object):
+    def __init__(self, p=0.5):
+        self.p = p
+
+    def __call__(self, img, target):
+        if random.random() < self.p:
+            return hflip(img, target)
+        return img, target
+
+
+class RandomResize(object):
+    def __init__(self, sizes, max_size=None):
+        assert isinstance(sizes, (list, tuple))
+        self.sizes = sizes
+        self.max_size = max_size
+
+    def __call__(self, img, target=None):
+        size = random.choice(self.sizes)
+        return resize(img, target, size, self.max_size)
+
+
+class RandomPad(object):
+    def __init__(self, max_pad):
+        self.max_pad = max_pad
+
+    def __call__(self, img, target):
+        pad_x = random.randint(0, self.max_pad)
+        pad_y = random.randint(0, self.max_pad)
+        return pad(img, target, (pad_x, pad_y))
+
+
+class RandomSelect(object):
+    """
+    Randomly selects between transforms1 and transforms2,
+    with probability p for transforms1 and (1 - p) for transforms2
+    """
+    def __init__(self, transforms1, transforms2, p=0.5):
+        self.transforms1 = transforms1
+        self.transforms2 = transforms2
+        self.p = p
+
+    def __call__(self, img, target):
+        if random.random() < self.p:
+            return self.transforms1(img, target)
+        return self.transforms2(img, target)
+
+
+class ToTensor(object):
+    def __call__(self, img, target):
+        return F.to_tensor(img), target
+
+
+class RandomErasing(object):
+
+    def __init__(self, *args, **kwargs):
+        self.eraser = T.RandomErasing(*args, **kwargs)
+
+    def __call__(self, img, target):
+        return self.eraser(img), target
+
+
+class Normalize(object):
+    def __init__(self, mean, std):
+        self.mean = mean
+        self.std = std
+
+    def __call__(self, image, target=None):
+        image = F.normalize(image, mean=self.mean, std=self.std)
+        if target is None:
+            return image, None
+        target = target.copy()
+        h, w = image.shape[-2:]
+        if "boxes" in target:
+            boxes = target["boxes"]
+            boxes = boxes / torch.tensor([w, h, w, h], dtype=torch.float32)
+            target["boxes"] = boxes
+        return image, target
 
 
 class Compose(object):
@@ -20,280 +265,10 @@ class Compose(object):
             image, target = t(image, target)
         return image, target
 
-
-class AffineTransform(Transform):
-    """
-    Augmentation from CenterNet
-    """
-    def __init__(self, output_size, boarder=64, random_aug=True):
-        """
-        Args:
-            output_size(int or tuple): a tuple represents (width, height) of image
-            boarder(int): boarder size of image
-            random_aug(bool): whether apply random augmentation on annos or not
-        """
-        super().__init__()
-        self._set_attributes(locals())
-        if isinstance(output_size, int):
-            self.output_size = (output_size, output_size)
-
-    def __call__(self, image, target):
-        self.affine = self.get_transform(image)
-        image = self.apply_image(image)
-        bbox = target["boxes"]
-        bbox = self.apply_box(bbox)
-        # Filter blank bounding boxes
-        keep = (bbox[:, 3] > bbox[:, 1]) & (bbox[:, 2] > bbox[:, 0])
-        bbox = bbox[keep]
-        classes = target["labels"][keep]
-
-        target["boxes"] = bbox
-        target["labels"] = classes
-
-        return image, target
-
-    def get_transform(self, img):
-        """
-        generate one `AffineTransform` for input image
-        """
-        img_shape = img.shape[:2]
-        center, scale = self.generate_center_and_scale(img_shape)
-        src, dst = self.generate_src_and_dst(center, scale, self.output_size)
-
-        return cv2.getAffineTransform(src, dst)
-
-    def apply_image(self, img: np.ndarray) -> np.ndarray:
-        """
-        Apply AffineTransform for the image(s).
-        Args:
-            img (ndarray): of shape HxW, HxWxC, or NxHxWxC.
-                The array can be of type uint8 in range [0, 255],
-                or floating point in range [0, 1] or [0, 255].
-        Returns:
-            ndarray: the image(s) after applying affine transform.
-        """
-        return cv2.warpAffine(img, self.affine, self.output_size, flags=cv2.INTER_LINEAR)
-
-    def apply_coords(self, coords: np.ndarray) -> np.ndarray:
-        """
-        Affine the coordinates.
-        Args:
-            coords (ndarray): floating point array of shape Nx2.
-                Each row is (x, y).
-        Returns:
-            ndarray: the flipped coordinates.
-        Note:
-            The inputs are floating point coordinates, not pixel indices.
-            Therefore they are flipped by `(W - x, H - y)`, not
-            `(W - 1 - x, H - 1 - y)`.
-        """
-        # aug_coords with shape (N, 3), self.affine: (2, 3)
-        w, h = self.output_size
-        aug_coords = np.column_stack((coords, np.ones(coords.shape[0])))
-        coords = np.dot(aug_coords, self.affine.T)
-        coords[..., 0] = np.clip(coords[..., 0], 0, w - 1)
-        coords[..., 1] = np.clip(coords[..., 1], 0, h - 1)
-        return coords
-
-    @staticmethod
-    def _get_boarder(boarder, size):
-        """
-        decide the boarder size of image
-        """
-        # NOTE This func may be reimplemented in the future
-        i = 1
-        size //= 2
-        while size <= boarder // i:
-            i *= 2
-        return boarder // i
-
-    def generate_center_and_scale(self, img_shape):
-        r"""
-        generate center and scale for image randomly
-        Args:
-            shape(tuple): a tuple represents (height, width) of image
-        """
-        height, width = img_shape
-        center = np.array([width / 2, height / 2], dtype=np.float32)
-        scale = float(max(img_shape))
-        if self.random_aug:
-            scale = scale * np.random.choice(np.arange(0.9, 1.1, 0.05))
-            center[0] = np.random.randint(low=(width // 2 - 5), high=(width // 2 + 5))
-            center[1] = np.random.randint(low=(height // 2 - 5), high=(height // 2 + 5))
-
-        return center, scale
-
-    @staticmethod
-    def generate_src_and_dst(center, size, output_size):
-        r"""
-        generate source and destination for affine transform
-        """
-        if not isinstance(size, np.ndarray) and not isinstance(size, list):
-            size = np.array([size, size], dtype=np.float32)
-        src = np.zeros((3, 2), dtype=np.float32)
-        src_w = size[0]
-        src_dir = [0, src_w * -0.5]
-        src[0, :] = center
-        src[1, :] = src[0, :] + src_dir
-        src[2, :] = src[1, :] + (src_dir[1], -src_dir[0])
-
-        dst = np.zeros((3, 2), dtype=np.float32)
-        dst_w, dst_h = output_size
-        dst_dir = [0, dst_w * -0.5]
-        dst[0, :] = [dst_w * 0.5, dst_h * 0.5]
-        dst[1, :] = dst[0, :] + dst_dir
-        dst[2, :] = dst[1, :] + (dst_dir[1], -dst_dir[0])
-
-        return src, dst
-
-
-class RandomHorizontalFlip(Transform):
-    """
-    Perform horizontal flip.
-    """
-
-    def __init__(self, prob: float):
-        super().__init__()
-        self._set_attributes(locals())
-
-    def __call__(self, image, target):
-        if random.random() < self.prob:
-            self.width = image.shape[1]
-            image = self.apply_image(image)
-            bbox = target["boxes"]
-            bbox = self.apply_box(bbox)
-            target["boxes"] = bbox
-        return image, target
-
-    def apply_image(self, img: np.ndarray) -> np.ndarray:
-        """
-        Flip the image(s).
-        Args:
-            img (ndarray): of shape HxW, HxWxC, or NxHxWxC. The array can be
-                of type uint8 in range [0, 255], or floating point in range
-                [0, 1] or [0, 255].
-        Returns:
-            ndarray: the flipped image(s).
-        """
-        # NOTE: opencv would be faster:
-        # https://github.com/pytorch/pytorch/issues/16424#issuecomment-580695672
-        if img.ndim <= 3:  # HxW, HxWxC
-            return np.flip(img, axis=1)
-        else:
-            return np.flip(img, axis=-2)
-
-    def apply_coords(self, coords: np.ndarray) -> np.ndarray:
-        """
-        Flip the coordinates.
-        Args:
-            coords (ndarray): floating point array of shape Nx2. Each row is
-                (x, y).
-        Returns:
-            ndarray: the flipped coordinates.
-        Note:
-            The inputs are floating point coordinates, not pixel indices.
-            Therefore they are flipped by `(W - x, H - y)`, not
-            `(W - 1 - x, H - 1 - y)`.
-        """
-        coords[:, 0] = self.width - coords[:, 0]
-        return coords
-
-
-class ResizeTransform(Transform):
-    """
-    Resize the image to a target size.
-    """
-
-    def __init__(self, new_h, new_w):
-        """
-        Args:
-            new_h, new_w (int): new image size
-        """
-        super().__init__()
-        self._set_attributes(locals())
-
-    def __call__(self, image, target):
-        self.h, self.w = image.shape[:2]  # h, w (int): original image size
-        image = self.apply_image(image)
-        bbox = target["boxes"]
-        bbox = self.apply_box(bbox)
-        target["boxes"] = bbox
-
-        return image, target
-
-    def apply_image(self, img):
-        img = cv2.resize(img, (self.new_w, self.new_h))
-        return img
-
-    def apply_coords(self, coords):
-        coords[:, 0] = coords[:, 0] * (self.new_w * 1.0 / self.w)
-        coords[:, 1] = coords[:, 1] * (self.new_h * 1.0 / self.h)
-        return coords
-
-
-class Normalize(Transform):
-    """
-    Normalization
-    """
-    def __init__(self, mean, std):
-        """
-        Args:
-            mean (list): mean
-            std (list): std
-        """
-        super().__init__()
-        self._set_attributes(locals())
-
-    def __call__(self, image, target):
-
-        image = self.apply_image(image)
-        bbox = target["boxes"]
-        bbox = self.apply_box(bbox)
-        target["boxes"] = bbox
-
-        return image, target
-
-    def apply_image(self, img):
-        # Pytorch's dataloader is efficient on torch.Tensor due to shared-memory,
-        # Therefore it's important to use torch.Tensor.
-        img = img.astype("float32")
-        if self.mean is not None:
-            mean = np.array(self.mean, dtype=np.float32)
-            img -= mean[None, None, :]
-        if self.std is not None:
-            std = np.array(self.std, dtype=np.float32)
-            img /= std[None, None, :]
-        # Set default scale of image in [0., 1.]
-        if self.mean is None and self.std is None:
-            img /= 255.
-        return img
-
-    def apply_coords(self, coords):
-        return coords
-
-
-class ToTensor:
-
-    def __call__(self, image, target):
-        height, width = image.shape[:2]
-
-        image = torch.as_tensor(image.transpose(2, 0, 1))
-        # Can use uint8 if it turns out to be slow some day
-        # XYXY_ABS BoxMode
-        bbox = torch.as_tensor(target["boxes"].astype("float32"))
-        # converted XYXY_REL BoxMode
-        bbox[:, 0::2] /= width
-        bbox[:, 1::2] /= height
-
-        label = torch.as_tensor(target["labels"].astype("int64"))
-        img_id = target['image_id']
-        img_shape = target['image_shape']
-
-        # Concat the bbox with label
-        target = {
-            'image_id': img_id,
-            'image_shape': img_shape,
-            'boxes': bbox,
-            'labels': label
-        }
-        return image, target
+    def __repr__(self):
+        format_string = self.__class__.__name__ + "("
+        for t in self.transforms:
+            format_string += "\n"
+            format_string += "    {0}".format(t)
+        format_string += "\n)"
+        return format_string

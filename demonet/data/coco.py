@@ -15,6 +15,8 @@ import torchvision
 from pycocotools import mask as coco_mask
 from pycocotools.coco import COCO
 
+from . import transforms as T
+
 
 class ConvertCocoPolysToMask(object):
     def __call__(self, image, target):
@@ -228,3 +230,40 @@ def get_coco_api_from_dataset(dataset):
     if isinstance(dataset, torchvision.datasets.CocoDetection):
         return dataset.coco
     return convert_to_coco_api(dataset)
+
+
+def build(
+    root,
+    image_set,
+    transforms,
+    year='2017',
+    mode='instances',
+):
+    anno_file_template = '{}_{}{}.json'
+    PATHS = {
+        'train': ('images', os.path.join(
+            'annotations', anno_file_template.format(mode, 'train', year),
+        )),
+        'val': ('images', os.path.join(
+            'annotations', anno_file_template.format(mode, 'val', year),
+        )),
+    }
+
+    t = [ConvertCocoPolysToMask()]
+
+    if transforms is not None:
+        t.append(transforms)
+    transforms = T.Compose(t)
+
+    img_folder, ann_file = PATHS[image_set]
+    img_folder = os.path.join(root, img_folder)
+    ann_file = os.path.join(root, ann_file)
+
+    dataset = CocoDetection(img_folder, ann_file, transforms=transforms)
+
+    if image_set == 'train':
+        dataset = _coco_remove_images_without_annotations(dataset)
+
+    # dataset = torch.utils.data.Subset(dataset, [i for i in range(500)])
+
+    return dataset

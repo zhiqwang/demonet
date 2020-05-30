@@ -12,10 +12,10 @@ def xywha_to_xyxy(boxes):
     Return:
         boxes (Tensor): XYXY_REL BoxMode
     """
-    return torch.cat([
-        boxes[..., :2] - boxes[..., 2:] / 2,
-        boxes[..., :2] + boxes[..., 2:] / 2,
-    ], dim=boxes.dim() - 1)
+    x_c, y_c, w, h = boxes.unbind(-1)
+    b = [(x_c - 0.5 * w), (y_c - 0.5 * h),
+         (x_c + 0.5 * w), (y_c + 0.5 * h)]
+    return torch.stack(b, dim=-1)
 
 
 def xyxy_to_xywha(boxes):
@@ -25,10 +25,10 @@ def xyxy_to_xywha(boxes):
     Return:
         boxes (Tensor): XYWHA_REL BoxMode
     """
-    return torch.cat([
-        (boxes[..., 2:] + boxes[..., :2]) / 2,
-        boxes[..., 2:] - boxes[..., :2],
-    ], dim=boxes.dim() - 1)
+    x0, y0, x1, y1 = boxes.unbind(-1)
+    b = [(x0 + x1) / 2, (y0 + y1) / 2,
+         (x1 - x0), (y1 - y0)]
+    return torch.stack(b, dim=-1)
 
 
 def area_of(left_top, right_bottom) -> torch.Tensor:

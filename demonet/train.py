@@ -17,19 +17,15 @@ import os
 import time
 
 import torch
-import torch.utils.data
+from torch.utils.data import DataLoader, DistributedSampler
 
-from .data.dataset import (
-    get_dataset,
-    get_transform,
-    collate_train,
-    collate_eval,
-)
+from .data import build_dataset
+from .data.data_utils import collate_train, collate_eval
 from .utils.distribute import init_distributed_mode, save_on_master, mkdir
 
 from .engine import train_one_epoch, evaluate
 
-from .modeling.ssd import build_model
+from .modeling import build_model
 
 
 def main(args):
@@ -40,50 +36,34 @@ def main(args):
 
     # Data loading code
     print("Loading data")
-    dataset = get_dataset(
-        args.dataset,
-        args.train_set,
-        get_transform(is_train=True, bgr_mean=args.bgr_mean, bgr_std=args.bgr_std),
-        args.data_path,
-        mode=args.dataset_mode,
-        years=args.dataset_year,
-    )
-    dataset_test = get_dataset(
-        args.dataset,
-        args.val_set,
-        get_transform(is_train=False, bgr_mean=args.bgr_mean, bgr_std=args.bgr_std),
-        args.data_path,
-        mode=args.dataset_mode,
-        years=args.dataset_year,
-    )
+    dataset_train = build_dataset(image_set='trainval', args=args)
+    dataset_val = build_dataset(image_set='val', args=args)
 
     print("Creating data loaders")
     if args.distributed:
-        train_sampler = torch.utils.data.distributed.DistributedSampler(dataset)
-        test_sampler = torch.utils.data.distributed.DistributedSampler(dataset_test)
+        sampler_train = DistributedSampler(dataset_train)
+        sampler_val = DistributedSampler(dataset_val, shuffle=False)
     else:
-        train_sampler = torch.utils.data.RandomSampler(dataset)
-        test_sampler = torch.utils.data.SequentialSampler(dataset_test)
+        sampler_train = torch.utils.data.RandomSampler(dataset_train)
+        sampler_val = torch.utils.data.SequentialSampler(dataset_val)
 
-    train_batch_sampler = torch.utils.data.BatchSampler(
-        train_sampler, args.batch_size, drop_last=True,
-    )
-    test_batch_sampler = torch.utils.data.BatchSampler(
-        test_sampler, args.batch_size, drop_last=False,
+    batch_sampler_train = torch.utils.data.BatchSampler(
+        sampler_train, args.batch_size, drop_last=True,
     )
 
-    data_loader = torch.utils.data.DataLoader(
-        dataset,
-        batch_sampler=train_batch_sampler,
-        num_workers=args.workers,
+    data_loader_train = DataLoader(
+        dataset_train,
+        batch_sampler=batch_sampler_train,
         collate_fn=collate_train,
+        num_workers=args.num_workers,
     )
-
-    data_loader_test = torch.utils.data.DataLoader(
-        dataset_test,
-        batch_sampler=test_batch_sampler,
-        num_workers=args.workers,
+    data_loader_val = DataLoader(
+        dataset_val,
+        args.batch_size,
+        sampler=sampler_val,
+        drop_last=False,
         collate_fn=collate_eval,
+        num_workers=args.num_workers,
     )
 
     print("Creating model")
@@ -123,15 +103,15 @@ def main(args):
         args.start_epoch = checkpoint['epoch'] + 1
 
     if args.test_only:
-        evaluate(model, data_loader_test, device=device)
+        evaluate(model, data_loader_val, device=device)
         return
 
     print("Start training")
     start_time = time.time()
     for epoch in range(args.start_epoch, args.epochs):
         if args.distributed:
-            train_sampler.set_epoch(epoch)
-        train_one_epoch(model, optimizer, data_loader, device, epoch, args.print_freq)
+            sampler_train.set_epoch(epoch)
+        train_one_epoch(model, optimizer, data_loader_train, device, epoch, args.print_freq)
 
         lr_scheduler.step()
         if args.output_dir:
@@ -147,7 +127,7 @@ def main(args):
             )
 
         # evaluate after every epoch
-        # evaluate(model, data_loader_test, device=device)
+        # evaluate(model, data_loader_val, device=device)
 
     total_time = time.time() - start_time
     total_time_str = str(datetime.timedelta(seconds=int(total_time)))
@@ -160,7 +140,7 @@ if __name__ == "__main__":
 
     parser.add_argument('--data-path', default='./data-bin',
                         help='dataset')
-    parser.add_argument('--dataset', default='coco',
+    parser.add_argument('--dataset-file', default='coco',
                         help='dataset')
     parser.add_argument('--dataset-mode', default='instances',
                         help='dataset mode')
@@ -170,10 +150,6 @@ if __name__ == "__main__":
                         help='set of train')
     parser.add_argument('--val-set', default='val',
                         help='set of val')
-    parser.add_argument('--bgr-mean', type=int, nargs='+',
-                        help='mean')
-    parser.add_argument('--bgr-std', type=int, nargs='+',
-                        help='mean')
     parser.add_argument('--model', default='ssd',
                         help='model')
     parser.add_argument('--device', default='cuda',
@@ -186,7 +162,7 @@ if __name__ == "__main__":
                         help='images per gpu, the total batch size is $NGPU x batch_size')
     parser.add_argument('--epochs', default=26, type=int, metavar='N',
                         help='number of total epochs to run')
-    parser.add_argument('--workers', default=4, type=int, metavar='N',
+    parser.add_argument('--num-workers', default=4, type=int, metavar='N',
                         help='number of data loading workers (default: 4)')
     parser.add_argument('--lr', default=0.02, type=float,
                         help='initial learning rate, 0.02 is the default value for training '
@@ -210,7 +186,6 @@ if __name__ == "__main__":
                         help='resume from checkpoint')
     parser.add_argument('--start-epoch', default=0, type=int,
                         help='start epoch')
-    parser.add_argument('--aspect-ratio-group-factor', default=-1, type=int)
     parser.add_argument("--test-only", dest="test_only", action="store_true",
                         help="Only test the model")
     parser.add_argument("--pretrained", dest="pretrained", action="store_true",
