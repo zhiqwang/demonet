@@ -57,6 +57,7 @@ class PriorBoxGenerator(nn.Module):
 
         return min_sizes, max_sizes
 
+    @torch.no_grad()
     def forward(self):
         priors = []
         for k, f in enumerate(self.feature_maps):

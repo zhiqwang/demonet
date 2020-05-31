@@ -82,6 +82,7 @@ class MultiBoxHeads(nn.Module):
         gt_labels = torch.stack(gt_labels, 0)
         return gt_locations, gt_labels
 
+    @torch.no_grad()
     def postprocess_detections(self, loc_data, conf_data, priors):
         """
         At test time, Detect is the final layer of SSD. Decode location preds,
