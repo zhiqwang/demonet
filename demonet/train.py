@@ -19,8 +19,8 @@ import time
 import torch
 from torch.utils.data import DataLoader, DistributedSampler
 
-from .data import build_dataset
-from .data.data_utils import collate_train, collate_eval
+from .data import build_dataset, collate_fn
+
 from .utils.distribute import init_distributed_mode, save_on_master, mkdir
 
 from .engine import train_one_epoch, evaluate
@@ -54,7 +54,7 @@ def main(args):
     data_loader_train = DataLoader(
         dataset_train,
         batch_sampler=batch_sampler_train,
-        collate_fn=collate_train,
+        collate_fn=collate_fn,
         num_workers=args.num_workers,
     )
     data_loader_val = DataLoader(
@@ -62,7 +62,7 @@ def main(args):
         args.batch_size,
         sampler=sampler_val,
         drop_last=False,
-        collate_fn=collate_eval,
+        collate_fn=collate_fn,
         num_workers=args.num_workers,
     )
 

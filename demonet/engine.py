@@ -25,12 +25,11 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch, print_freq):
 
         lr_scheduler = warmup_lr_scheduler(optimizer, warmup_iters, warmup_factor)
 
-    for images, targets in metric_logger.log_every(data_loader, print_freq, header):
-        images = images.to(device)
-        for key, value in targets.items():
-            targets[key] = [v.to(device) for v in value]
+    for samples, targets in metric_logger.log_every(data_loader, print_freq, header):
+        samples = samples.to(device)
+        targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
 
-        loss_dict = model(images, targets)
+        loss_dict = model(samples, targets)
 
         losses = sum(loss for loss in loss_dict.values())
 
@@ -83,12 +82,12 @@ def evaluate(model, data_loader, base_ds, device):
     iou_types = _get_iou_types(model)
     coco_evaluator = CocoEvaluator(base_ds, iou_types)
 
-    for images, targets in metric_logger.log_every(data_loader, 100, header):
-        images = images.to(device)
+    for samples, targets in metric_logger.log_every(data_loader, 100, header):
+        samples = samples.to(device)
 
         torch.cuda.synchronize()
         model_time = time.time()
-        outputs = model(images)
+        outputs = model(samples)
 
         model_time = time.time() - model_time
 
@@ -108,7 +107,7 @@ def evaluate(model, data_loader, base_ds, device):
     print("Averaged stats:", metric_logger)
     coco_evaluator.synchronize_between_processes()
 
-    # accumulate predictions from all images
+    # accumulate predictions from all samples
     coco_evaluator.accumulate()
     coco_evaluator.summarize()
     torch.set_num_threads(n_threads)

@@ -198,6 +198,20 @@ class RandomResize(object):
         return resize(img, target, size, self.max_size)
 
 
+class Resize(object):
+    def __init__(self, size):
+        if isinstance(size, tuple):
+            sizes = size
+            assert len(sizes) == 2, "The length of sizes must be 2"
+        else:
+            sizes = (size, size)
+
+        self.sizes = sizes
+
+    def __call__(self, img, target=None):
+        return resize(img, target, self.sizes)
+
+
 class RandomPad(object):
     def __init__(self, max_pad):
         self.max_pad = max_pad

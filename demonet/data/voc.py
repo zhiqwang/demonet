@@ -18,8 +18,10 @@ class ConvertVOCtoCOCO(object):
         # return image, target
         anno = target['annotations']
         image_id = target['image_id']
+        image_id = torch.tensor([image_id])
+
         height, width = anno['size']['height'], anno['size']['width']
-        image_shape = [width, height]
+
         boxes = []
         classes = []
         ishard = []
@@ -43,7 +45,8 @@ class ConvertVOCtoCOCO(object):
         target['ishard'] = ishard
 
         target['image_id'] = image_id
-        target['image_shape'] = image_shape
+        target["orig_size"] = torch.as_tensor([int(height), int(width)])
+        target["size"] = torch.as_tensor([int(height), int(width)])
 
         return image, target
 
@@ -74,24 +77,24 @@ def make_voc_transforms(image_set='train', image_size=300):
         T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
     ])
 
-    scales = [480, 512, 544, 576, 608, 640, 672, 704, 736, 768, 800]
+    scales = [480, 512, 544, 576, 608, 640]
 
     if image_set == 'train' or image_set == 'trainval':
         return T.Compose([
             T.RandomHorizontalFlip(),
             T.RandomSelect(
-                T.RandomResize(scales, max_size=1333),
+                T.Resize(image_size),
                 T.Compose([
-                    T.RandomResize([400, 500, 600]),
+                    T.RandomResize(scales),
                     T.RandomSizeCrop(384, 600),
-                    T.RandomResize([image_size], max_size=1333),
+                    T.Resize(image_size),
                 ])
             ),
             normalize,
         ])
     elif image_set == 'val':
         return T.Compose([
-            T.RandomResize([image_size], max_size=500),
+            T.Resize(image_size),
             normalize,
         ])
     else:
@@ -104,7 +107,10 @@ def build(image_set, year, args):
         img_folder=args.data_path,
         year=year,
         image_set=image_set,
-        transforms=make_voc_transforms(image_set=image_set),
+        transforms=make_voc_transforms(
+            image_set=image_set,
+            image_size=args.image_size,
+        ),
     )
 
     return dataset

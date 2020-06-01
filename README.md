@@ -8,7 +8,7 @@ Currently work in process, very pleasure for suggestion and cooperation.
 
 ```sh
 CUDA_VISIBLE_DEVICES=[GPU_ID] python -m demonet.train \
-    --dataset voc \
+    --dataset-file voc \
     --train-set trainval \
     --val-set test \
     --dataset-year 2007 2012 \
@@ -18,8 +18,6 @@ CUDA_VISIBLE_DEVICES=[GPU_ID] python -m demonet.train \
     --num-classes [NUM_CLASSES] \
     --batch-size 32 \
     --image-size 304 \
-    --bgr-mean 104 117 124 \
-    --bgr-std 57 57 58 \
     --lr 0.01
 ```
 
@@ -32,7 +30,5 @@ CUDA_VISIBLE_DEVICES=[GPU_ID] python -m demonet.train \
     --num-classes [NUM_CLASSES] \
     --batch-size 32 \
     --image-size 304 \
-    --bgr-mean 104 117 124 \
-    --bgr-std 57 57 58 \
     --test-only
 ```
