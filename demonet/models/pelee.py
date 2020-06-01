@@ -35,10 +35,10 @@ class Pelee(nn.Module):
 
         return detections
 
-    def forward(self, images, targets=None):
+    def forward(self, samples, targets=None):
         """
         Arguments:
-            images (Tensor): images to be processed
+            samples (Tensor): samples to be processed
             targets (Tensor): ground-truth boxes present in the image (optional)
         Returns:
             result (list[BoxList] or dict[Tensor]): the output from the model.
@@ -51,16 +51,16 @@ class Pelee(nn.Module):
         conf = list()
 
         for k, feat in enumerate(self.features):
-            images = feat(images)
+            samples = feat(samples)
             if k == 8:
-                sources.append(images)
+                sources.append(samples)
 
-        sources.append(images)
+        sources.append(samples)
 
         for k, v in enumerate(self.extras):
-            images = v(images)
+            samples = v(samples)
             if k % 2 == 1:
-                sources.append(images)
+                sources.append(samples)
 
         for k, x in enumerate(sources):
             sources[k] = self.resblock[k](x)

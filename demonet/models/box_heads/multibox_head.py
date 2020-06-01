@@ -5,10 +5,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torchvision
 
-from .box_utils import hard_negative_mining, xywha_to_xyxy
-
 from ..priors_generator.prior_box import PriorBoxGenerator
-from ..priors_generator.anchor_utils import assign_priors, encode, decode
+from ..priors_generator.anchor_utils import PriorMatcher, decode
+
+from .box_utils import hard_negative_mining
 
 
 class MultiBoxHeads(nn.Module):
@@ -32,21 +32,21 @@ class MultiBoxHeads(nn.Module):
     ):
         super().__init__()
         self.variances = variances
-        self.iou_threshold = iou_threshold
         self.background_label = background_label
         self.score_thresh = score_thresh
         self.nms_thresh = nms_thresh
         self.top_k = top_k
 
-        self.prior_generator = PriorBoxGenerator(
-            image_size=image_size,
-            aspect_ratios=aspect_ratios,
-            feature_maps=feature_maps,
-            min_ratio=min_ratio,
-            max_ratio=max_ratio,
-            steps=steps,
-            clip=clip,
-        )
+        self.image_size = image_size
+        self.aspect_ratios = aspect_ratios
+        self.feature_maps = feature_maps
+        self.min_ratio = min_ratio
+        self.max_ratio = max_ratio
+        self.steps = steps
+        self.clip = clip
+
+        self.prior_generator = self.prior_generator()
+        self.prior_matcher = PriorMatcher(variances, iou_threshold)
 
     def forward(self, loc, conf, targets):
         loc = loc.view(loc.shape[0], -1, 4)  # loc preds
@@ -58,32 +58,32 @@ class MultiBoxHeads(nn.Module):
 
         if self.training:
             assert targets is not None
-            gt_loc, gt_labels = self.assign_targets_to_priors(priors, targets)
+            gt_loc, gt_labels = self.prior_matcher(priors, targets)
             loss_objectness, loss_box_reg = multibox_loss(loc, conf, gt_loc, gt_labels)
             losses = {
                 'loc': loss_box_reg,
                 'conf': loss_objectness,
             }
         else:
-            predictions = self.postprocess_detections(loc, conf, priors)
+            predictions = self.postprocess(loc, conf, priors)
         return predictions, losses
 
-    def assign_targets_to_priors(self, priors_xywha, targets):
-        priors_xyxy = xywha_to_xyxy(priors_xywha)
-        gt_locations = list()
-        gt_labels = list()
-        for box, label in zip(targets['boxes'], targets['labels']):
-            box, label = assign_priors(box, label, priors_xyxy, self.iou_threshold)
-            locations = encode(box, priors_xywha, self.variances)
-            gt_locations.append(locations)
-            gt_labels.append(label)
+    def prior_generator(self):
 
-        gt_locations = torch.stack(gt_locations, 0)
-        gt_labels = torch.stack(gt_labels, 0)
-        return gt_locations, gt_labels
+        priors = PriorBoxGenerator(
+            image_size=self.image_size,
+            aspect_ratios=self.aspect_ratios,
+            feature_maps=self.feature_maps,
+            min_ratio=self.min_ratio,
+            max_ratio=self.max_ratio,
+            steps=self.steps,
+            clip=self.clip,
+        )
+
+        return priors
 
     @torch.no_grad()
-    def postprocess_detections(self, loc_data, conf_data, priors):
+    def postprocess(self, loc_data, conf_data, priors):
         """
         At test time, Detect is the final layer of SSD. Decode location preds,
         apply non-maximum suppression to location predictions based on conf

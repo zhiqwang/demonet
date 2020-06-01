@@ -1,10 +1,39 @@
 import torch
+import torch.nn as nn
 
 from ..box_heads.box_utils import (
     pairwise_iou,
     xywha_to_xyxy,
     xyxy_to_xywha,
 )
+
+
+class PriorMatcher(nn.Module):
+    """This class computes an assignment between the priors and the targets of the network.
+    """
+    def __init__(self, variances, iou_threshold):
+        super().__init__()
+        self.variances = variances
+        self.iou_threshold = iou_threshold
+
+    @torch.no_grad()
+    def forward(self, priors_xywha, targets):
+        """
+        Method able to compute a matching between priors and targets
+        """
+        priors_xyxy = xywha_to_xyxy(priors_xywha)
+        gt_locations = list()
+        gt_labels = list()
+        for target in targets:
+            box, label = target['boxes'], target['labels']
+            box, label = assign_priors(box, label, priors_xyxy, self.iou_threshold)
+            locations = encode(box, priors_xywha, self.variances)
+            gt_locations.append(locations)
+            gt_labels.append(label)
+
+        gt_locations = torch.stack(gt_locations, 0)
+        gt_labels = torch.stack(gt_labels, 0)
+        return gt_locations, gt_labels
 
 
 def encode(boxes, priors, variances):
