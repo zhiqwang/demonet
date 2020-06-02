@@ -1,8 +1,9 @@
 import torch
 import torch.nn as nn
 
+from torchvision.ops.boxes import box_iou
+
 from ..box_heads.box_utils import (
-    pairwise_iou,
     xywha_to_xyxy,
     xyxy_to_xywha,
 )
@@ -18,15 +19,13 @@ class PriorMatcher(nn.Module):
 
     @torch.no_grad()
     def forward(self, priors_xywha, targets):
-        """
-        Method able to compute a matching between priors and targets
-        """
+
         priors_xyxy = xywha_to_xyxy(priors_xywha)
         gt_locations = list()
         gt_labels = list()
         for target in targets:
             box, label = target['boxes'], target['labels']
-            box, label = assign_priors(box, label, priors_xyxy, self.iou_threshold)
+            box, label = assign_targets_to_priors(box, label, priors_xyxy, self.iou_threshold)
             locations = encode(box, priors_xywha, self.variances)
             gt_locations.append(locations)
             gt_labels.append(label)
@@ -34,6 +33,41 @@ class PriorMatcher(nn.Module):
         gt_locations = torch.stack(gt_locations, 0)
         gt_labels = torch.stack(gt_labels, 0)
         return gt_locations, gt_labels
+
+
+def assign_targets_to_priors(gt_boxes, gt_labels, priors, iou_threshold):
+    """Assign ground truth boxes and targets to priors.
+    Args:
+        gt_boxes (Tensor): [num_targets, 4]: ground truth boxes
+        gt_labels (Tensor): [num_targets,]: labels of targets
+        priors (Tensor): [num_priors, 4]: XYXY_REL BoxMode
+        iou_threshold (float): iou threshold
+    Returns:
+        boxes (Tensor): [num_priors, 4] real values for priors.
+        labels (Tensor): [num_priros] labels for priors.
+    """
+    match_quality_matrix = box_iou(gt_boxes, priors)  # num_targets x num_priors
+    # empty targets or proposals not supported during training
+    if match_quality_matrix.shape[0] == 0:
+        raise ValueError(
+            "No ground-truth boxes available for one of the images "
+            "during training")
+    else:
+        raise ValueError(
+            "No proposal boxes available for one of the images "
+            "during training")
+    matched_vals, matches = match_quality_matrix.max(0)  # num_priors
+    _, best_prior_per_target_index = match_quality_matrix.max(1)  # num_targets
+
+    for target_index, prior_index in enumerate(best_prior_per_target_index):
+        matches[prior_index] = target_index
+    # 2.0 is used to make sure every target has a prior assigned
+    matched_vals.index_fill_(0, best_prior_per_target_index, 2)
+
+    labels = gt_labels[matches]  # num_priors
+    labels[matched_vals < iou_threshold] = 0  # the backgound id
+    boxes = gt_boxes[matches]
+    return boxes, labels
 
 
 def encode(boxes, priors, variances):
@@ -109,29 +143,3 @@ def locations_to_boxes(locations, priors, variances):
         locations[..., :2] * variances[0] * priors[..., 2:] + priors[..., :2],
         torch.exp(locations[..., 2:] * variances[1]) * priors[..., 2:],
     ], dim=locations.dim() - 1)
-
-
-def assign_priors(gt_boxes, gt_labels, priors, iou_threshold):
-    """Assign ground truth boxes and targets to priors.
-    Args:
-        gt_boxes (Tensor): [num_targets, 4]: ground truth boxes
-        gt_labels (Tensor): [num_targets,]: labels of targets
-        priors (Tensor): [num_priors, 4]: XYXY_REL BoxMode
-        iou_threshold (float): iou threshold
-    Returns:
-        boxes (Tensor): [num_priors, 4] real values for priors.
-        labels (Tensor): [num_priros] labels for priors.
-    """
-    ious = pairwise_iou(gt_boxes.unsqueeze(0), priors.unsqueeze(1))  # num_priors x num_targets
-    best_target_per_prior, best_target_per_prior_index = ious.max(1)  # num_priors
-    best_prior_per_target, best_prior_per_target_index = ious.max(0)  # num_targets
-
-    for target_index, prior_index in enumerate(best_prior_per_target_index):
-        best_target_per_prior_index[prior_index] = target_index
-    # 2.0 is used to make sure every target has a prior assigned
-    best_target_per_prior.index_fill_(0, best_prior_per_target_index, 2)
-
-    labels = gt_labels[best_target_per_prior_index]  # num_priors
-    labels[best_target_per_prior < iou_threshold] = 0  # the backgound id
-    boxes = gt_boxes[best_target_per_prior_index]
-    return boxes, labels

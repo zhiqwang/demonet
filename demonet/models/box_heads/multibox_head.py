@@ -45,20 +45,20 @@ class MultiBoxHeads(nn.Module):
         self.steps = steps
         self.clip = clip
 
-        self.prior_generator = self.prior_generator()
-        self.prior_matcher = PriorMatcher(variances, iou_threshold)
+        self.build_priors = self.prior_generator()
+        self.build_matcher = PriorMatcher(variances, iou_threshold)
 
     def forward(self, loc, conf, targets):
         loc = loc.view(loc.shape[0], -1, 4)  # loc preds
         conf = conf.view(conf.shape[0], loc.shape[1], -1)  # conf preds
-        priors = self.prior_generator().to(loc.device)
+        priors = self.build_priors().to(loc.device)
 
         predictions = None
         losses = {}
 
         if self.training:
             assert targets is not None
-            gt_loc, gt_labels = self.prior_matcher(priors, targets)
+            gt_loc, gt_labels = self.build_matcher(priors, targets)
             loss_objectness, loss_box_reg = multibox_loss(loc, conf, gt_loc, gt_labels)
             losses = {
                 'loc': loss_box_reg,
