@@ -159,10 +159,14 @@ class RandomSizeCrop(object):
         self.max_size = max_size
 
     def __call__(self, img: PIL.Image.Image, target: dict):
-        w = random.randint(self.min_size, min(img.width, self.max_size))
-        h = random.randint(self.min_size, min(img.height, self.max_size))
-        region = T.RandomCrop.get_params(img, [h, w])
-        return crop(img, target, region)
+        while True:
+            w = random.randint(self.min_size, min(img.width, self.max_size))
+            h = random.randint(self.min_size, min(img.height, self.max_size))
+            region = T.RandomCrop.get_params(img, [h, w])
+
+            croped_img, croped_target = crop(img, target, region)
+            if len(croped_target['labels']) > 0:
+                return croped_img, croped_target
 
 
 class CenterCrop(object):
@@ -265,6 +269,7 @@ class Normalize(object):
         h, w = image.shape[-2:]
         if "boxes" in target:
             boxes = target["boxes"]
+            # converted to XYXY_REL BoxMode
             boxes = boxes / torch.tensor([w, h, w, h], dtype=torch.float32)
             target["boxes"] = boxes
         return image, target

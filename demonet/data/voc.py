@@ -77,15 +77,13 @@ def make_voc_transforms(image_set='train', image_size=300):
         T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
     ])
 
-    scales = [480, 512, 544, 576, 608, 640]
-
     if image_set == 'train' or image_set == 'trainval':
         return T.Compose([
             T.RandomHorizontalFlip(),
             T.RandomSelect(
                 T.Resize(image_size),
                 T.Compose([
-                    T.RandomResize(scales),
+                    T.RandomResize([400, 500, 600]),
                     T.RandomSizeCrop(384, 600),
                     T.Resize(image_size),
                 ])

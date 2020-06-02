@@ -47,15 +47,16 @@ def assign_targets_to_priors(gt_boxes, gt_labels, priors, iou_threshold):
         labels (Tensor): [num_priros] labels for priors.
     """
     match_quality_matrix = box_iou(gt_boxes, priors)  # num_targets x num_priors
-    # empty targets or proposals not supported during training
-    if match_quality_matrix.shape[0] == 0:
-        raise ValueError(
-            "No ground-truth boxes available for one of the images "
-            "during training")
-    else:
-        raise ValueError(
-            "No proposal boxes available for one of the images "
-            "during training")
+    if match_quality_matrix.numel() == 0:
+        # empty targets or proposals not supported during training
+        if match_quality_matrix.shape[0] == 0:
+            raise ValueError(
+                "No ground-truth boxes available for one of the images "
+                "during training")
+        else:
+            raise ValueError(
+                "No proposal boxes available for one of the images "
+                "during training")
     matched_vals, matches = match_quality_matrix.max(0)  # num_priors
     _, best_prior_per_target_index = match_quality_matrix.max(1)  # num_targets
 

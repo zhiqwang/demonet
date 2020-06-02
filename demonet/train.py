@@ -19,13 +19,10 @@ import time
 import torch
 from torch.utils.data import DataLoader, DistributedSampler
 
-from .data import build_dataset, collate_fn
-
 from .utils.distribute import init_distributed_mode, save_on_master, mkdir
-
-from .engine import train_one_epoch, evaluate
-
+from .data import build_dataset, collate_fn
 from .models import build_model
+from .engine import train_one_epoch, evaluate
 
 
 def main(args):
@@ -36,8 +33,8 @@ def main(args):
 
     # Data loading code
     print("Loading data")
-    dataset_train = build_dataset(image_set='trainval', args=args)
-    dataset_val = build_dataset(image_set='val', args=args)
+    dataset_train = build_dataset(image_set=args.train_set, args=args)
+    dataset_val = build_dataset(image_set=args.val_set, args=args)
 
     print("Creating data loaders")
     if args.distributed:
