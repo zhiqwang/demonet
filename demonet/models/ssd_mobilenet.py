@@ -45,18 +45,22 @@ class SSDLiteWithMobileNetV2(nn.Module):
         loc = list()
         conf = list()
 
-        for k, feat in enumerate(self.features):
-            samples = feat(samples)
-            if k == 8:
-                sources.append(samples)
+        for k, feature in enumerate(self.features):
+            if k == 13:
+                assert isinstance(feature, InvertedResidual)
+                for j, sub_feature in enumerate(feature.conv):
+                    samples = sub_feature(samples)
+                    if j == 0:
+                        sources.append(samples)
+            else:
+                samples = feature(samples)
 
         sources.append(samples)
 
         # apply extra layers and cache source layer outputs
         for k, v in enumerate(self.extras):
             samples = v(samples)
-            if k % 2 == 1:
-                sources.append(samples)
+            sources.append(samples)
 
         for (x, l, c) in zip(sources, self.loc_conv, self.conf_conv):
             loc.append(l(x).permute(0, 2, 3, 1).contiguous())
@@ -95,30 +99,28 @@ def build_backbone(pretrained=True, trainable_layers=1):
     return model.body
 
 
-def build_extras(in_channels, batch_norm=False):
+def build_extras(in_channels):
     layers = list()
 
     channels = [in_channels, 512, 256, 256, 64]
     expand_ratio = [0.2, 0.25, 0.5, 0.25]
 
-    block = InvertedResidual
-
     for i in range(4):
-        layers.append(block(channels[i], channels[i + 1], 2, expand_ratio=expand_ratio[i]))
+        layers.append(InvertedResidual(channels[i], channels[i + 1], 2, expand_ratio[i]))
 
     return layers
 
 
 class SeperableConv2d(nn.Sequential):
     """Replace Conv2d with a depthwise Conv2d and Pointwise Conv2d."""
-    def __init__(self, in_planes, out_planes, kernel_size=1, stride=1, padding=0, norm_layer=None):
+    def __init__(self, in_planes, out_planes, kernel_size, stride=1, padding=0, norm_layer=None):
         if norm_layer is None:
             norm_layer = nn.BatchNorm2d
         super().__init__(
-            nn.Conv2d(in_planes, in_planes, kernel_size, stride, padding, groups=in_planes),
+            nn.Conv2d(in_planes, in_planes, kernel_size, stride=stride, padding=padding, groups=in_planes),
             norm_layer(in_planes),
             nn.ReLU6(inplace=True),
-            nn.Conv2d(in_planes, out_planes, kernel_size),
+            nn.Conv2d(in_planes, out_planes, 1),
         )
 
 
@@ -130,11 +132,11 @@ def build_multibox(cfg, num_classes, width_mult=1.0):
     channels = [in_channels, 1280, 512, 256, 256, 64]
 
     for i in range(5):
-        loc_layers.append(SeperableConv2d(channels[i], cfg[i] * 4, kernel_size=3, padding=1))
-        conf_layers.append(SeperableConv2d(channels[i], cfg[i] * num_classes, kernel_size=3, padding=1))
+        loc_layers.append(SeperableConv2d(channels[i], cfg[i] * 4, 3, padding=1))
+        conf_layers.append(SeperableConv2d(channels[i], cfg[i] * num_classes, 3, padding=1))
 
-    loc_layers.append(nn.Conv2d(channels[-1], cfg[-1] * 4, kernel_size=1))
-    conf_layers.append(nn.Conv2d(channels[-1], cfg[-1] * num_classes, kernel_size=1))
+    loc_layers.append(nn.Conv2d(channels[-1], cfg[-1] * 4, 1))
+    conf_layers.append(nn.Conv2d(channels[-1], cfg[-1] * num_classes, 1))
 
     return (loc_layers, conf_layers)
 
@@ -151,7 +153,7 @@ def build(args):
 
     pretrained_backbone = False if args.pretrained else True
     body_layers = build_backbone(pretrained_backbone)
-    extras_layers = build_extras(1280, batch_norm=True)
+    extras_layers = build_extras(1280)
 
     anchor_nms_cfg = [6, 6, 6, 6, 6, 6]  # number of boxes per feature map location
     head_layers = build_multibox(anchor_nms_cfg, args.num_classes)
