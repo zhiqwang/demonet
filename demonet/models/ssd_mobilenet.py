@@ -1,27 +1,24 @@
 import torch
 import torch.nn as nn
 
+from torchvision.models.mobilenet import InvertedResidual, mobilenet_v2
+
 from .backbone.backbone_utils import Backbone
-from .backbone.mobilenet import InvertedResidual, mobilenet_v2
 from .box_heads.multibox_head import MultiBoxHeads
 
 
-class MobileNetV2SSD(nn.Module):
+class SSDLiteWithMobileNetV2(nn.Module):
     r"""MobileNet V2 SSD model class
     Args:
         body: MobileNet V2 body layers
         extras: extra layers
-        resblock: res block layers that feed to multibox loc and conf layers
         head: "multibox head" consists of loc and conf conv layers
     """
-    def __init__(self, body, extras, resblock, head, **kwargs):
+    def __init__(self, body, extras, head, **kwargs):
         super().__init__()
 
         self.features = body.features
-
         self.extras = nn.ModuleList(extras)
-        self.resblock = nn.ModuleList(resblock)
-
         self.loc_conv = nn.ModuleList(head[0])
         self.conf_conv = nn.ModuleList(head[1])
 
@@ -55,13 +52,11 @@ class MobileNetV2SSD(nn.Module):
 
         sources.append(samples)
 
+        # apply extra layers and cache source layer outputs
         for k, v in enumerate(self.extras):
             samples = v(samples)
             if k % 2 == 1:
                 sources.append(samples)
-
-        for k, x in enumerate(sources):
-            sources[k] = self.resblock[k](x)
 
         for (x, l, c) in zip(sources, self.loc_conv, self.conf_conv):
             loc.append(l(x).permute(0, 2, 3, 1).contiguous())
@@ -109,14 +104,14 @@ def build_extras(in_channels, batch_norm=False):
     block = InvertedResidual
 
     for i in range(4):
-        layers.append([block(channels[i], channels[i + 1], 2, expand_ratio=expand_ratio[i])])
+        layers.append(block(channels[i], channels[i + 1], 2, expand_ratio=expand_ratio[i]))
 
     return layers
 
 
 class SeperableConv2d(nn.Sequential):
     """Replace Conv2d with a depthwise Conv2d and Pointwise Conv2d."""
-    def __init__(in_planes, out_planes, kernel_size=1, stride=1, padding=0, norm_layer=None):
+    def __init__(self, in_planes, out_planes, kernel_size=1, stride=1, padding=0, norm_layer=None):
         if norm_layer is None:
             norm_layer = nn.BatchNorm2d
         super().__init__(
@@ -144,35 +139,34 @@ def build_multibox(cfg, num_classes, width_mult=1.0):
     return (loc_layers, conf_layers)
 
 
-model_urls = {'mobilenet_v2_ssd_lite': ''}
+model_urls = {'ssd_lite_mobilenet_v2': ''}
 
 
-def build(size=300, num_classes=21, pretrained=False, **kwargs):
-    if size != 300:
+def build(args):
+    if args.image_size != 300:
         raise NotImplementedError(
-            "You specified size [{}]. However, currently only "
-            "Pelee304 (size=300) is supported!".format(size),
+            "You specified image_size [{}]. However, currently only "
+            "MobileNetV2SSD300 (image_size=300) is supported!".format(args.image_size),
         )
 
-    pretrained_backbone = False if pretrained else True
+    pretrained_backbone = False if args.pretrained else True
     body_layers = build_backbone(pretrained_backbone)
     extras_layers = build_extras(1280, batch_norm=True)
 
     anchor_nms_cfg = [6, 6, 6, 6, 6, 6]  # number of boxes per feature map location
-    head_layers = build_multibox(anchor_nms_cfg, num_classes)
+    head_layers = build_multibox(anchor_nms_cfg, args.num_classes)
 
-    model = MobileNetV2SSD(
+    model = SSDLiteWithMobileNetV2(
         body_layers,
         extras_layers,
         head_layers,
-        image_size=size,
+        image_size=args.image_size,
         aspect_ratios=[[2, 3], [2, 3], [2, 3], [2, 3], [2, 3], [2, 3]],
         feature_maps=[19, 10, 5, 3, 2, 1],
         min_ratio=20,
         max_ratio=90,
         steps=[16, 32, 64, 100, 150, 300],
         clip=True,
-        **kwargs,
     )
 
     return model

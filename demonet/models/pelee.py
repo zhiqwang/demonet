@@ -187,11 +187,11 @@ def build_multibox(cfg, num_classes):
 model_urls = {'pelee': ''}
 
 
-def build(size=304, num_classes=21, **kwargs):
-    if size != 304:
+def build(args):
+    if args.image_size != 304:
         raise NotImplementedError(
-            "You specified size [{}]. However, currently only "
-            "Pelee304 (size=304) is supported!".format(size),
+            "You specified image_size [{}]. However, currently only "
+            "Pelee304 (image_size=304) is supported!".format(args.image_size),
         )
 
     pretrained_backbone = False
@@ -200,21 +200,20 @@ def build(size=304, num_classes=21, **kwargs):
     nchannels = [512, 704, 256, 256, 256]
     anchor_nms_cfg = [6, 6, 6, 6, 6]  # number of boxes per feature map location
     resblock_layers = build_resblock(nchannels)
-    head_layers = build_multibox(anchor_nms_cfg, num_classes)
+    head_layers = build_multibox(anchor_nms_cfg, args.num_classes)
 
     model = Pelee(
         body_layers,
         extras_layers,
         resblock_layers,
         head_layers,
-        image_size=size,
+        image_size=args.image_size,
         aspect_ratios=[[2, 3], [2, 3], [2, 3], [2, 3], [2, 3]],
         feature_maps=[19, 10, 5, 3, 1],
         min_ratio=15,
         max_ratio=90,
         steps=[16, 30, 60, 101, 304],
         clip=True,
-        **kwargs,
     )
 
     return model

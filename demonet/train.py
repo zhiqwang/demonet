@@ -64,10 +64,7 @@ def main(args):
     )
 
     print("Creating model")
-    model = build_model(
-        size=args.image_size,
-        num_classes=args.num_classes,
-    )
+    model = build_model(args)
     model.to(device)
 
     model_without_ddp = model
@@ -135,13 +132,15 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description=__doc__)
 
+    parser.add_argument('--arch', default='ssd_lite_mobilenet_v2',
+                        help='model architecture')
     parser.add_argument('--data-path', default='./data-bin',
                         help='dataset')
     parser.add_argument('--dataset-file', default='coco',
                         help='dataset')
     parser.add_argument('--dataset-mode', default='instances',
                         help='dataset mode')
-    parser.add_argument('--dataset-year', nargs='+', default=['2017'],
+    parser.add_argument('--dataset-year', default=['2017'], nargs='+',
                         help='dataset year')
     parser.add_argument('--train-set', default='train',
                         help='set of train')
@@ -171,7 +170,7 @@ if __name__ == "__main__":
                         dest='weight_decay')
     parser.add_argument('--lr-step-size', default=8, type=int,
                         help='decrease lr every step-size epochs')
-    parser.add_argument('--lr-steps', default=[16, 22], nargs='+', type=int,
+    parser.add_argument('--lr-steps', default=[16, 70], nargs='+', type=int,
                         help='decrease lr every step-size epochs')
     parser.add_argument('--lr-gamma', default=0.1, type=float,
                         help='decrease lr by a factor of lr-gamma')

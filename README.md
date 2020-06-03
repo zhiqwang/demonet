@@ -8,6 +8,8 @@ Currently work in process, very pleasure for suggestion and cooperation.
 
 ```sh
 CUDA_VISIBLE_DEVICES=[GPU_ID] python -m demonet.train \
+    --arch ssd_lite_mobilenet_v2 \
+    --image-size 300 \
     --dataset-file voc \
     --train-set trainval \
     --val-set test \
@@ -25,6 +27,11 @@ CUDA_VISIBLE_DEVICES=[GPU_ID] python -m demonet.train \
 
 ```sh
 CUDA_VISIBLE_DEVICES=[GPU_ID] python -m demonet.train \
+    --arch ssd_lite_mobilenet_v2 \
+    --image-size 300 \
+    --dataset-file voc \
+    --val-set test \
+    --dataset-year 2007 2012 \
     --data-path [DATA_PATH] \
     --resume [CHECKPOINT_PATH] \
     --num-classes [NUM_CLASSES] \
