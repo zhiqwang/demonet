@@ -3,7 +3,7 @@ import cv2
 
 
 def select_top_predictions(predictions, threshold):
-    idx = (predictions['scores'] > threshold).nonzero().squeeze(1)
+    idx = (predictions['scores'] > threshold).nonzero(as_tuple=False).squeeze(1)
     new_predictions = {}
     for k, v in predictions.items():
         new_predictions[k] = v[idx]

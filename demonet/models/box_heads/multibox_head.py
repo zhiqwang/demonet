@@ -128,7 +128,7 @@ class MultiBoxHeads(nn.Module):
             labels = labels.reshape(-1)
 
             # remove low scoring decoded_boxes
-            indices = torch.nonzero(conf_scores > self.score_thresh).squeeze(1)
+            indices = torch.nonzero(conf_scores > self.score_thresh, as_tuple=False).squeeze(1)
             decoded_boxes = decoded_boxes[indices]
             conf_scores = conf_scores[indices]
             labels = labels[indices]
