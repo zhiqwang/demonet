@@ -50,8 +50,8 @@ class Pelee(nn.Module):
         loc = list()
         conf = list()
 
-        for k, feat in enumerate(self.features):
-            samples = feat(samples)
+        for k, f in enumerate(self.features):
+            samples = f(samples)
             if k == 8:
                 sources.append(samples)
 

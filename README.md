@@ -19,7 +19,6 @@ CUDA_VISIBLE_DEVICES=[GPU_ID] python -m demonet.train \
     --epochs [NUM_EPOCHS] \
     --num-classes [NUM_CLASSES] \
     --batch-size 32 \
-    --image-size 304 \
     --lr 0.01
 ```
 
@@ -36,6 +35,5 @@ CUDA_VISIBLE_DEVICES=[GPU_ID] python -m demonet.train \
     --resume [CHECKPOINT_PATH] \
     --num-classes [NUM_CLASSES] \
     --batch-size 32 \
-    --image-size 304 \
     --test-only
 ```
