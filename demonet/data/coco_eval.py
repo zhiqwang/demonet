@@ -6,6 +6,9 @@ The difference is that there is less copy-pasting from pycocotools
 in the end of the file, as python3 can suppress prints with contextlib
 """
 
+import os
+import contextlib
+
 import numpy as np
 import copy
 
@@ -35,7 +38,11 @@ class CocoEvaluator(object):
 
         for iou_type in self.iou_types:
             results = self.prepare(predictions, iou_type)
-            coco_dt = COCO.loadRes(self.coco_gt, results) if results else COCO()
+
+            # suppress pycocotools prints
+            with open(os.devnull, 'w') as devnull:
+                with contextlib.redirect_stdout(devnull):
+                    coco_dt = COCO.loadRes(self.coco_gt, results) if results else COCO()
             coco_eval = self.coco_eval[iou_type]
 
             coco_eval.cocoDt = coco_dt
@@ -61,6 +68,10 @@ class CocoEvaluator(object):
     def prepare(self, predictions, iou_type):
         if iou_type == "bbox":
             return self.prepare_for_coco_detection(predictions)
+        elif iou_type == "segm":
+            return self.prepare_for_coco_segmentation(predictions)
+        elif iou_type == "keypoints":
+            return self.prepare_for_coco_keypoint(predictions)
         else:
             raise ValueError("Unknown iou type {}".format(iou_type))
 
