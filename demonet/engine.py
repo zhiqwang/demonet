@@ -71,10 +71,6 @@ def _get_iou_types(model):
 
 @torch.no_grad()
 def evaluate(model, data_loader, base_ds, device):
-    n_threads = torch.get_num_threads()
-    # FIXME remove this and make paste_masks_in_image run on the GPU
-    torch.set_num_threads(1)
-
     model.eval()
     metric_logger = MetricLogger(delimiter="  ")
     header = 'Test:'
@@ -82,10 +78,9 @@ def evaluate(model, data_loader, base_ds, device):
     iou_types = _get_iou_types(model)
     coco_evaluator = CocoEvaluator(base_ds, iou_types)
 
-    for samples, targets in metric_logger.log_every(data_loader, 100, header):
+    for samples, targets in metric_logger.log_every(data_loader, 20, header):
         samples = samples.to(device)
 
-        torch.cuda.synchronize()
         model_time = time.time()
         outputs = model(samples)
 
@@ -93,8 +88,11 @@ def evaluate(model, data_loader, base_ds, device):
 
         res = {}
         for target, output in zip(targets, outputs):
-            image_shape = np.tile(target["image_shape"], 2)
-            output["boxes"] = [(box * image_shape).astype("int64") for box in output["boxes"]]
+            # The output of models has converted to numpy
+            orig_target_sizes = target["orig_size"].cpu().numpy()
+            orig_target_sizes = np.tile(orig_target_sizes[1::-1], 2)
+
+            output["boxes"] = [(box * orig_target_sizes).astype("int64") for box in output["boxes"]]
             res[target["image_id"].item()] = output
 
         evaluator_time = time.time()
@@ -110,5 +108,4 @@ def evaluate(model, data_loader, base_ds, device):
     # accumulate predictions from all samples
     coco_evaluator.accumulate()
     coco_evaluator.summarize()
-    torch.set_num_threads(n_threads)
     return coco_evaluator
