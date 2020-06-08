@@ -97,15 +97,6 @@ def evaluate(model, data_loader, device, output_dir):
     _do_python_eval(data_loader, output_dir, use_07=True)
 
 
-def xyxy_to_xywh(boxes):
-    bbox = []
-    for box in boxes:
-        # BoxMode: convert from XYXY_ABS to XYWH_ABS
-        box[2:] -= box[:2]
-        bbox.append(box.tolist())
-    return bbox
-
-
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description=__doc__)
