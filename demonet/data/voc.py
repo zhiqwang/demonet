@@ -17,6 +17,7 @@ class ConvertVOCtoCOCO(object):
     def __call__(self, image, target):
         # return image, target
         anno = target['annotations']
+        filename = anno['filename'].split('.')[0]
         image_id = target['image_id']
         image_id = torch.tensor([image_id])
 
@@ -47,6 +48,7 @@ class ConvertVOCtoCOCO(object):
         target['image_id'] = image_id
         target["orig_size"] = torch.as_tensor([int(height), int(width)])
         target["size"] = torch.as_tensor([int(height), int(width)])
+        target['filename'] = filename
 
         return image, target
 
@@ -74,7 +76,7 @@ def make_voc_transforms(image_set='train', image_size=300):
 
     normalize = T.Compose([
         T.ToTensor(),
-        T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+        T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
     ])
 
     if image_set == 'train' or image_set == 'trainval':
@@ -90,7 +92,7 @@ def make_voc_transforms(image_set='train', image_size=300):
             ),
             normalize,
         ])
-    elif image_set == 'val':
+    elif image_set == 'test':
         return T.Compose([
             T.Resize(image_size),
             normalize,

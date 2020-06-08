@@ -24,16 +24,35 @@ CUDA_VISIBLE_DEVICES=[GPU_ID] python -m demonet.train \
 
 ## Evaluation
 
+### Evaluation on coco dataset
+
 ```sh
 CUDA_VISIBLE_DEVICES=[GPU_ID] python -m demonet.train \
     --arch ssd_lite_mobilenet_v2 \
     --image-size 300 \
-    --dataset-file voc \
+    --dataset-file coco \
+    --dataaset-mode pascal \
     --val-set test \
-    --dataset-year 2007 2012 \
+    --dataset-year 2007 \
     --data-path [DATA_PATH] \
     --resume [CHECKPOINT_PATH] \
     --num-classes [NUM_CLASSES] \
     --batch-size 32 \
     --test-only
+```
+
+### Evaluation on voc dataset
+
+```sh
+CUDA_VISIBLE_DEVICES=[GPU_ID] python -m demonet.eval_voc \
+    --arch ssd_lite_mobilenet_v2 \
+    --image-size 300 \
+    --dataset-file voc \
+    --val-set test \
+    --dataset-year 2007 \
+    --data-path [VOC_DEVKIT_ROOT_PATH] \
+    --num-classes [NUM_CLASSES] \
+    --batch-size 32 \
+    --resume [CHECKPOINT_PATH] \
+    --output-dir [OUTPUT_DIR]
 ```
