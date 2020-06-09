@@ -183,7 +183,7 @@ if __name__ == "__main__":
                         help='decrease lr every step-size epochs')
     parser.add_argument('--lr-gamma', default=0.1, type=float,
                         help='decrease lr by a factor of lr-gamma')
-    parser.add_argument('--t-max', default=120, type=int,
+    parser.add_argument('--t-max', default=200, type=int,
                         help='T_max value for Cosine Annealing Scheduler')
     parser.add_argument('--print-freq', default=20, type=int,
                         help='print frequency')

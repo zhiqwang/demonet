@@ -46,7 +46,7 @@ class SSDLiteWithMobileNetV2(nn.Module):
         conf = list()
 
         for k, feature in enumerate(self.features):
-            if k == 13:
+            if k == 14:
                 assert isinstance(feature, InvertedResidual)
                 for j, sub_feature in enumerate(feature.conv):
                     samples = sub_feature(samples)
