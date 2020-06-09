@@ -83,17 +83,7 @@ def build_backbone(pretrained=True, trainable_layers=1):
         trainable_layers (int): number of trainable (not frozen) peleenet layers starting from final block.
     """
     backbone = mobilenet_v2(pretrained=pretrained)
-
-    # select layers that wont be frozen
-    assert trainable_layers == 1
-    layers_to_train = ['features']
-    # freeze layers only if pretrained backbone is used
-    for name, parameter in backbone.named_parameters():
-        if all([not name.startswith(layer) for layer in layers_to_train]):
-            parameter.requires_grad_(False)
-
     return_layers = {'features': '0'}
-
     model = Backbone(backbone, return_layers)
 
     return model.body
@@ -152,7 +142,7 @@ def build(args):
         )
 
     pretrained_backbone = False if args.pretrained else True
-    body_layers = build_backbone(pretrained_backbone)
+    body_layers = build_backbone(pretrained=pretrained_backbone)
     extras_layers = build_extras(1280)
 
     anchor_nms_cfg = [6, 6, 6, 6, 6, 6]  # number of boxes per feature map location
@@ -166,11 +156,11 @@ def build(args):
         aspect_ratios=[[2, 3], [2, 3], [2, 3], [2, 3], [2, 3], [2, 3]],
         feature_maps=[19, 10, 5, 3, 2, 1],
         min_ratio=20,
-        max_ratio=90,
+        max_ratio=80,
         steps=[16, 32, 64, 100, 150, 300],
         clip=True,
-        # min_sizes=[60, 105, 150, 195, 240, 285],
-        # max_sizes=[105, 150, 195, 240, 285, 330],
+        min_sizes=[60, 105, 150, 195, 240, 285],
+        max_sizes=[105, 150, 195, 240, 285, 330],
     )
 
     return model
