@@ -27,6 +27,8 @@ class PriorBoxGenerator(nn.Module):
         max_ratio=90,
         steps=[16, 30, 60, 101, 304],
         clip=True,
+        min_sizes=None,
+        max_sizes=None,
     ):
         super().__init__()
 
@@ -36,7 +38,11 @@ class PriorBoxGenerator(nn.Module):
         self.num_priors = len(feature_maps)
         self.min_ratio = min_ratio
         self.max_ratio = max_ratio
-        self.min_sizes, self.max_sizes = self.compute_sizes()
+        if min_sizes is not None:
+            self.min_sizes, self.max_sizes = min_sizes, max_sizes
+        else:
+            self.min_sizes, self.max_sizes = self.compute_sizes()
+
         self.steps = steps
         self.clip = clip
 
@@ -88,6 +94,6 @@ class PriorBoxGenerator(nn.Module):
         # back to torch land
         output = torch.as_tensor(priors, dtype=torch.float32)
         if self.clip:
-            output.clamp_(min=0, max=1)
+            output.clamp_(min=0.0, max=1.0)
 
         return output

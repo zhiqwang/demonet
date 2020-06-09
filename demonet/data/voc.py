@@ -48,7 +48,8 @@ class ConvertVOCtoCOCO(object):
         target['image_id'] = image_id
         target["orig_size"] = torch.as_tensor([int(height), int(width)])
         target["size"] = torch.as_tensor([int(height), int(width)])
-        target['filename'] = filename
+        # convert filename in int8
+        target['filename'] = torch.tensor([ord(i) for i in list(filename)], dtype=torch.int8)
 
         return image, target
 
@@ -92,7 +93,7 @@ def make_voc_transforms(image_set='train', image_size=300):
             ),
             normalize,
         ])
-    elif image_set == 'test':
+    elif image_set == 'val' or image_set == 'test':
         return T.Compose([
             T.Resize(image_size),
             normalize,

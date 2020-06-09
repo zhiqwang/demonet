@@ -29,6 +29,8 @@ class MultiBoxHeads(nn.Module):
         max_ratio=90,
         steps=[8, 16, 32, 64, 100, 300],
         clip=False,
+        min_sizes=None,
+        max_sizes=None,
     ):
         super().__init__()
         self.variances = variances
@@ -44,6 +46,8 @@ class MultiBoxHeads(nn.Module):
         self.max_ratio = max_ratio
         self.steps = steps
         self.clip = clip
+        self.min_sizes = min_sizes
+        self.max_sizes = max_sizes
 
         self.build_priors = self.prior_generator()
         self.build_matcher = PriorMatcher(variances, iou_threshold)
@@ -78,6 +82,8 @@ class MultiBoxHeads(nn.Module):
             max_ratio=self.max_ratio,
             steps=self.steps,
             clip=self.clip,
+            min_sizes=self.min_sizes,
+            max_sizes=self.max_sizes,
         )
 
         return priors

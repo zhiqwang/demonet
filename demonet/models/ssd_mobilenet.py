@@ -105,7 +105,7 @@ def build_extras(in_channels):
     channels = [in_channels, 512, 256, 256, 64]
     expand_ratio = [0.2, 0.25, 0.5, 0.25]
 
-    for i in range(4):
+    for i in range(len(expand_ratio)):
         layers.append(InvertedResidual(channels[i], channels[i + 1], 2, expand_ratio[i]))
 
     return layers
@@ -169,6 +169,8 @@ def build(args):
         max_ratio=90,
         steps=[16, 32, 64, 100, 150, 300],
         clip=True,
+        # min_sizes=[60, 105, 150, 195, 240, 285],
+        # max_sizes=[105, 150, 195, 240, 285, 330],
     )
 
     return model

@@ -68,7 +68,7 @@ def evaluate(model, data_loader, device, output_dir):
         model_time = time.time() - model_time
 
         for target, output in zip(targets, outputs):
-            image_index.append(target["filename"])
+            image_index.append(''.join([chr(i) for i in target['filename'].tolist()]))
 
             # The output of models has converted to numpy
             orig_target_sizes = target["orig_size"].cpu().numpy()
