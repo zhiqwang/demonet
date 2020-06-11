@@ -38,7 +38,6 @@ def main(args):
     print("Creating model")
     model = build_model(args)
     model.to(device)
-    model.eval()
 
     # load model weights
     checkpoint = torch.load(args.resume, map_location="cpu")
