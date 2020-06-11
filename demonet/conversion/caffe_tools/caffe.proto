@@ -1653,11 +1653,9 @@ message PoolingParameter {
   optional Engine engine = 11 [default = DEFAULT];
   // If global_pooling then it will pool over the size of the bottom by doing
   // kernel_h = bottom->height and kernel_w = bottom->width
-  enum RoundMode {
-    CEIL = 0;
-    FLOOR = 1;
-  }
-  optional RoundMode round_mode = 13 [default = CEIL];
+  optional bool global_pooling = 12 [default = false];
+  // Specify floor/ceil mode
+  optional bool ceil_mode = 13 [default = true];
 }
 
 message PowerParameter {
