@@ -169,6 +169,7 @@ class MultiBoxHeads(nn.Module):
         prediction = {}
         prediction['labels'] = np.array([t.item() for t in top_label], dtype=np.int64)
         prediction['scores'] = np.array([t.item() for t in top_conf], dtype=np.float32)
+        top_boxes.clamp_(min=0.0, max=1.0)
         prediction['boxes'] = top_boxes.cpu().numpy().tolist()
 
         return prediction
