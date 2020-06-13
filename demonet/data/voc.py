@@ -77,7 +77,7 @@ def make_voc_transforms(image_set='train', image_size=300):
 
     normalize = T.Compose([
         T.ToTensor(),
-        T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+        T.Normalize([0.498, 0.498, 0.498], [0.502, 0.502, 0.502]),
     ])
 
     if image_set == 'train' or image_set == 'trainval':

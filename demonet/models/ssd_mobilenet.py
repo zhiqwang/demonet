@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from torchvision.models.mobilenet import InvertedResidual, mobilenet_v2
+from .backbone.mobilenet import InvertedResidual, mobilenet_v2
 
 from .backbone.backbone_utils import Backbone
 from .box_heads.multibox_head import MultiBoxHeads
@@ -17,10 +17,10 @@ class SSDLiteWithMobileNetV2(nn.Module):
     def __init__(self, body, extras, head, **kwargs):
         super().__init__()
 
-        self.features = body.features
+        self.base_net = body.features
         self.extras = nn.ModuleList(extras)
-        self.loc_conv = nn.ModuleList(head[0])
-        self.conf_conv = nn.ModuleList(head[1])
+        self.classification_headers = nn.ModuleList(head[1])
+        self.regression_headers = nn.ModuleList(head[0])
 
         self.multibox_heads = MultiBoxHeads(**kwargs)
 
@@ -45,12 +45,12 @@ class SSDLiteWithMobileNetV2(nn.Module):
         loc = list()
         conf = list()
 
-        for k, feature in enumerate(self.features):
+        for k, feature in enumerate(self.base_net):
             if k == 14:
                 assert isinstance(feature, InvertedResidual)
                 for j, sub_feature in enumerate(feature.conv):
                     samples = sub_feature(samples)
-                    if j == 0:
+                    if j == 2:
                         sources.append(samples)
             else:
                 samples = feature(samples)
@@ -62,7 +62,7 @@ class SSDLiteWithMobileNetV2(nn.Module):
             samples = v(samples)
             sources.append(samples)
 
-        for (x, l, c) in zip(sources, self.loc_conv, self.conf_conv):
+        for (x, l, c) in zip(sources, self.regression_headers, self.classification_headers):
             loc.append(l(x).permute(0, 2, 3, 1).contiguous())
             conf.append(c(x).permute(0, 2, 3, 1).contiguous())
 
