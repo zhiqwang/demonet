@@ -101,17 +101,15 @@ def build_extras(in_channels):
     return layers
 
 
-class SeperableConv2d(nn.Sequential):
-    """Replace Conv2d with a depthwise Conv2d and Pointwise Conv2d."""
-    def __init__(self, in_planes, out_planes, kernel_size, stride=1, padding=0, norm_layer=None):
-        if norm_layer is None:
-            norm_layer = nn.BatchNorm2d
-        super().__init__(
-            nn.Conv2d(in_planes, in_planes, kernel_size, stride=stride, padding=padding, groups=in_planes),
-            norm_layer(in_planes),
-            nn.ReLU6(inplace=True),
-            nn.Conv2d(in_planes, out_planes, 1),
-        )
+def SeperableConv2d(in_channels, out_channels, kernel_size, padding=0, onnx_compatible=False):
+    """Replace Conv2d with a depthwise Conv2d and Pointwise Conv2d.
+    """
+    return nn.Sequential(
+        nn.Conv2d(in_channels, in_channels, kernel_size, padding=padding, groups=in_channels),
+        nn.BatchNorm2d(in_channels),
+        nn.ReLU6(),
+        nn.Conv2d(in_channels, out_channels, 1),
+    )
 
 
 def build_multibox(cfg, num_classes, width_mult=1.0):
