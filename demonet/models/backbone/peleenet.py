@@ -4,11 +4,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from torchvision.models.utils import load_state_dict_from_url
-
 
 model_urls = {
-    'peleenet_v1': './models/peleenetv1-a639ec97.pth',
+    'peleenet_v1': './checkpoints/pretrained/lijun/peleenet.pth',
 }
 
 
@@ -198,8 +196,8 @@ def _peleenet(
 ):
     model = PeleeNet(growth_rate, block_config, num_init_features, **kwargs)
     if pretrained:
-        state_dict = load_state_dict_from_url(model_urls[arch], progress)
-        model.load_state_dict(state_dict)
+        state_dict = torch.load(model_urls[arch], map_location='cpu')
+        model.features.load_state_dict(state_dict)
     return model
 
 

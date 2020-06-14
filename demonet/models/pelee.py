@@ -194,8 +194,8 @@ def build(args):
             "Pelee304 (image_size=304) is supported!".format(args.image_size),
         )
 
-    pretrained_backbone = False
-    body_layers = build_backbone(pretrained_backbone)
+    pretrained_backbone = False if args.pretrained else True
+    body_layers = build_backbone(pretrained=pretrained_backbone)
     extras_layers = build_extras(704, batch_norm=True)
     nchannels = [512, 704, 256, 256, 256]
     anchor_nms_cfg = [6, 6, 6, 6, 6]  # number of boxes per feature map location
@@ -207,6 +207,7 @@ def build(args):
         extras_layers,
         resblock_layers,
         head_layers,
+        score_thresh=args.score_thresh,
         image_size=args.image_size,
         aspect_ratios=[[2, 3], [2, 3], [2, 3], [2, 3], [2, 3]],
         feature_maps=[19, 10, 5, 3, 1],
