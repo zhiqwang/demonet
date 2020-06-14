@@ -152,6 +152,7 @@ def build(args):
         body_layers,
         extras_layers,
         head_layers,
+        score_thresh=args.score_thresh,
         image_size=args.image_size,
         aspect_ratios=[[2, 3], [2, 3], [2, 3], [2, 3], [2, 3], [2, 3]],
         feature_maps=[19, 10, 5, 3, 2, 1],

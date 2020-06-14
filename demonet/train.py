@@ -158,6 +158,8 @@ if __name__ == "__main__":
                         help="semantic segmentation")
     parser.add_argument('--device', default='cuda',
                         help='device')
+    parser.add_argument('--score-thresh', default=0.01, type=float,
+                        help='inference score threshold')
     parser.add_argument('--image-size', default=300, type=int,
                         help='input size of models')
     parser.add_argument('--num-classes', default=21, type=int,
