@@ -1,14 +1,13 @@
 import time
+from pathlib import Path
 
 import numpy as np
 
 import torch
 from torch.utils.data import DataLoader
 
-from utils.distribute import mkdir
-
 from models import build_model
-from utils.metric_logger import MetricLogger
+from util.misc import MetricLogger
 
 from datasets import build_dataset, collate_fn
 from datasets.voc_eval import _write_voc_results_file, _do_python_eval
@@ -43,8 +42,9 @@ def main(args):
     checkpoint = torch.load(args.resume, map_location="cpu")
     model.load_state_dict(checkpoint["model"])
 
+    output_dir = Path(args.output_dir)
     # evaluation
-    evaluate(model, data_loader, device, args.output_dir)
+    evaluate(model, data_loader, device, output_dir)
 
 
 @torch.no_grad()
@@ -144,6 +144,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.output_dir:
-        mkdir(args.output_dir)
+        Path(args.output_dir).mkdir(parents=True, exist_ok=True)
 
     main(args)

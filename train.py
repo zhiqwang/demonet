@@ -1,142 +1,21 @@
-r"""PyTorch Detection Training.
-
-To run in a multi-gpu environment, use the distributed launcher::
-
-    python -m torch.distributed.launch --nproc_per_node=$NGPU --use_env \
-        train.py ... --world-size $NGPU
-
-The default hyperparameters are tuned for training on 8 gpus and 2 images per gpu.
-    --lr 0.02 --batch-size 2 --world-size 8
-If you use different number of gpus, the learning rate should be changed to 0.02/8*$NGPU.
-
-On top of that, for training Faster/Mask R-CNN, the default hyperparameters are
-    --epochs 26 --lr-steps 16 22 --aspect-ratio-group-factor 3
-"""
 import datetime
 import os
+import argparse
 import time
+from pathlib import Path
 
 import torch
 from torch.utils.data import DataLoader, DistributedSampler
 
-from utils.distribute import init_distributed_mode, save_on_master, mkdir
+import util.misc as utils
+
 from datasets import build_dataset, collate_fn, get_coco_api_from_dataset
 from models import build_model
 from engine import train_one_epoch, evaluate
 
 
-def main(args):
-    init_distributed_mode(args)
-    print(args)
-
-    device = torch.device(args.device)
-
-    # Data loading code
-    print("Loading data")
-    dataset_train = build_dataset(args.train_set, args.dataset_year, args)
-    dataset_val = build_dataset(args.val_set, args.dataset_year, args)
-    base_ds = get_coco_api_from_dataset(dataset_val)
-
-    print("Creating data loaders")
-    if args.distributed:
-        sampler_train = DistributedSampler(dataset_train)
-        sampler_val = DistributedSampler(dataset_val, shuffle=False)
-    else:
-        sampler_train = torch.utils.data.RandomSampler(dataset_train)
-        sampler_val = torch.utils.data.SequentialSampler(dataset_val)
-
-    batch_sampler_train = torch.utils.data.BatchSampler(
-        sampler_train, args.batch_size, drop_last=True,
-    )
-
-    data_loader_train = DataLoader(
-        dataset_train,
-        batch_sampler=batch_sampler_train,
-        collate_fn=collate_fn,
-        num_workers=args.num_workers,
-    )
-    data_loader_val = DataLoader(
-        dataset_val,
-        args.batch_size,
-        sampler=sampler_val,
-        drop_last=False,
-        collate_fn=collate_fn,
-        num_workers=args.num_workers,
-    )
-
-    print("Creating model")
-    model = build_model(args)
-    model.to(device)
-
-    model_without_ddp = model
-    if args.distributed:
-        model = torch.nn.parallel.DistributedDataParallel(
-            model,
-            device_ids=[args.gpu],
-        )
-        model_without_ddp = model.module
-
-    params = [p for p in model.parameters() if p.requires_grad]
-    optimizer = torch.optim.SGD(
-        params,
-        lr=args.lr,
-        momentum=args.momentum,
-        weight_decay=args.weight_decay,
-    )
-
-    if args.lr_scheduler == 'multi-step':
-        lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(
-            optimizer,
-            milestones=args.lr_steps,
-            gamma=args.lr_gamma,
-        )
-    elif args.lr_scheduler == 'cosine':
-        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, args.t_max)
-    else:
-        raise ValueError(f'scheduler {args.lr_scheduler} not supported')
-
-    if args.resume:
-        checkpoint = torch.load(args.resume, map_location='cpu')
-        model_without_ddp.load_state_dict(checkpoint['model'])
-        optimizer.load_state_dict(checkpoint['optimizer'])
-        lr_scheduler.load_state_dict(checkpoint['lr_scheduler'])
-        args.start_epoch = checkpoint['epoch'] + 1
-
-    if args.test_only:
-        evaluate(model, data_loader_val, base_ds, device)
-        return
-
-    print("Start training")
-    start_time = time.time()
-    for epoch in range(args.start_epoch, args.epochs):
-        if args.distributed:
-            sampler_train.set_epoch(epoch)
-        train_one_epoch(model, optimizer, data_loader_train, device, epoch, args.print_freq)
-
-        lr_scheduler.step()
-        if args.output_dir:
-            save_on_master(
-                {
-                    'model': model_without_ddp.state_dict(),
-                    'optimizer': optimizer.state_dict(),
-                    'lr_scheduler': lr_scheduler.state_dict(),
-                    'args': args,
-                    'epoch': epoch,
-                },
-                os.path.join(args.output_dir, 'model_{}.pth'.format(epoch)),
-            )
-
-        # evaluate after every epoch
-        # evaluate(model, data_loader_val, device=device)
-
-    total_time = time.time() - start_time
-    total_time_str = str(datetime.timedelta(seconds=int(total_time)))
-    print('Training time {}'.format(total_time_str))
-
-
-if __name__ == "__main__":
-    import argparse
-    parser = argparse.ArgumentParser(description=__doc__)
+def get_args_parser():
+    parser = argparse.ArgumentParser('Set single shot multiBox detector', add_help=False)
 
     parser.add_argument('--arch', default='ssd_lite_mobilenet_v2',
                         help='model architecture')
@@ -205,10 +84,122 @@ if __name__ == "__main__":
                         help='number of distributed processes')
     parser.add_argument('--dist-url', default='env://',
                         help='url used to set up distributed training')
+    return parser
 
+
+def main(args):
+    utils.init_distributed_mode(args)
+    print(args)
+
+    device = torch.device(args.device)
+
+    # Data loading code
+    print("Loading data")
+    dataset_train = build_dataset(args.train_set, args.dataset_year, args)
+    dataset_val = build_dataset(args.val_set, args.dataset_year, args)
+    base_ds = get_coco_api_from_dataset(dataset_val)
+
+    print("Creating data loaders")
+    if args.distributed:
+        sampler_train = DistributedSampler(dataset_train)
+        sampler_val = DistributedSampler(dataset_val, shuffle=False)
+    else:
+        sampler_train = torch.utils.data.RandomSampler(dataset_train)
+        sampler_val = torch.utils.data.SequentialSampler(dataset_val)
+
+    batch_sampler_train = torch.utils.data.BatchSampler(
+        sampler_train, args.batch_size, drop_last=True,
+    )
+
+    data_loader_train = DataLoader(
+        dataset_train,
+        batch_sampler=batch_sampler_train,
+        collate_fn=collate_fn,
+        num_workers=args.num_workers,
+    )
+    data_loader_val = DataLoader(
+        dataset_val,
+        args.batch_size,
+        sampler=sampler_val,
+        drop_last=False,
+        collate_fn=collate_fn,
+        num_workers=args.num_workers,
+    )
+
+    print("Creating model")
+    model = build_model(args)
+    model.to(device)
+
+    model_without_ddp = model
+    if args.distributed:
+        model = torch.nn.parallel.DistributedDataParallel(
+            model,
+            device_ids=[args.gpu],
+        )
+        model_without_ddp = model.module
+
+    params = [p for p in model.parameters() if p.requires_grad]
+    optimizer = torch.optim.SGD(
+        params,
+        lr=args.lr,
+        momentum=args.momentum,
+        weight_decay=args.weight_decay,
+    )
+
+    if args.lr_scheduler == 'multi-step':
+        lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(
+            optimizer,
+            milestones=args.lr_steps,
+            gamma=args.lr_gamma,
+        )
+    elif args.lr_scheduler == 'cosine':
+        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, args.t_max)
+    else:
+        raise ValueError(f'scheduler {args.lr_scheduler} not supported')
+
+    output_dir = Path(args.output_dir)
+    if args.resume:
+        checkpoint = torch.load(args.resume, map_location='cpu')
+        model_without_ddp.load_state_dict(checkpoint['model'])
+        optimizer.load_state_dict(checkpoint['optimizer'])
+        lr_scheduler.load_state_dict(checkpoint['lr_scheduler'])
+        args.start_epoch = checkpoint['epoch'] + 1
+
+    if args.test_only:
+        evaluate(model, data_loader_val, base_ds, device)
+        return
+
+    print("Start training")
+    start_time = time.time()
+    for epoch in range(args.start_epoch, args.epochs):
+        if args.distributed:
+            sampler_train.set_epoch(epoch)
+        train_one_epoch(model, optimizer, data_loader_train, device, epoch, args.print_freq)
+
+        lr_scheduler.step()
+        if args.output_dir:
+            utils.save_on_master(
+                {
+                    'model': model_without_ddp.state_dict(),
+                    'optimizer': optimizer.state_dict(),
+                    'lr_scheduler': lr_scheduler.state_dict(),
+                    'args': args,
+                    'epoch': epoch,
+                },
+                os.path.join(output_dir, 'model_{}.pth'.format(epoch)),
+            )
+
+        # evaluate after every epoch
+        # evaluate(model, data_loader_val, device=device)
+
+    total_time = time.time() - start_time
+    total_time_str = str(datetime.timedelta(seconds=int(total_time)))
+    print('Training time {}'.format(total_time_str))
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser('DEMONET training and evaluation script', parents=[get_args_parser()])
     args = parser.parse_args()
-
     if args.output_dir:
-        mkdir(args.output_dir)
-
+        Path(args.output_dir).mkdir(parents=True, exist_ok=True)
     main(args)

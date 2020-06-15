@@ -2,8 +2,8 @@ import cv2
 import torch
 
 from models import build_model
-from utils.image import image_transform
-from utils.overlay import overlay_boxes, overlay_class_names
+from util.image import image_transform
+from util.overlay import overlay_boxes, overlay_class_names
 
 
 def main(args):
