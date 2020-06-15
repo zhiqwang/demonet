@@ -15,7 +15,7 @@ import copy
 from pycocotools.cocoeval import COCOeval
 from pycocotools.coco import COCO
 
-from ..utils.distribute import all_gather
+from utils.distribute import all_gather
 
 
 class CocoEvaluator(object):

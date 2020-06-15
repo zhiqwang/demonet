@@ -6,10 +6,10 @@ import torch
 
 import torchvision.models
 
-from .data.coco_eval import CocoEvaluator
+from datasets.coco_eval import CocoEvaluator
 
-from .utils.distribute import warmup_lr_scheduler, reduce_dict
-from .utils.metric_logger import MetricLogger, SmoothedValue
+from utils.distribute import warmup_lr_scheduler, reduce_dict
+from utils.metric_logger import MetricLogger, SmoothedValue
 
 
 def train_one_epoch(model, optimizer, data_loader, device, epoch, print_freq):

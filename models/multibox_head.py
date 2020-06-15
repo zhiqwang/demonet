@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torchvision
 
-from ..utils.box_ops import hard_negative_mining
+from utils.box_ops import hard_negative_mining
 
 from .prior_box import PriorBoxGenerator
 from .prior_matcher import PriorMatcher, decode

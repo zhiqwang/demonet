@@ -9,7 +9,7 @@ import torch
 import torchvision.transforms as T
 import torchvision.transforms.functional as F
 
-from .utils import interpolate
+from datasets.utils import interpolate
 
 
 def crop(image, target, region):

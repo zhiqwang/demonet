@@ -19,10 +19,10 @@ import time
 import torch
 from torch.utils.data import DataLoader, DistributedSampler
 
-from .utils.distribute import init_distributed_mode, save_on_master, mkdir
-from .data import build_dataset, collate_fn, get_coco_api_from_dataset
-from .models import build_model
-from .engine import train_one_epoch, evaluate
+from utils.distribute import init_distributed_mode, save_on_master, mkdir
+from datasets import build_dataset, collate_fn, get_coco_api_from_dataset
+from models import build_model
+from engine import train_one_epoch, evaluate
 
 
 def main(args):

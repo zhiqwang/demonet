@@ -5,13 +5,13 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader
 
-from .utils.distribute import mkdir
+from utils.distribute import mkdir
 
-from .data import build_dataset, collate_fn
+from models import build_model
+from utils.metric_logger import MetricLogger
 
-from .models import build_model
-from .utils.metric_logger import MetricLogger
-from .data.voc_eval import _write_voc_results_file, _do_python_eval
+from datasets import build_dataset, collate_fn
+from datasets.voc_eval import _write_voc_results_file, _do_python_eval
 
 
 def main(args):

@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from ..modules.peleenet import BasicConv2d, peleenet_v1
+from modules.peleenet import BasicConv2d, peleenet_v1
 
 from .backbone_utils import Backbone
 from .multibox_head import MultiBoxHeads
