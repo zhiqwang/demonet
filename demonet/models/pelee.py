@@ -2,9 +2,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .backbone.backbone_utils import Backbone
-from .backbone.peleenet import BasicConv2d, peleenet_v1
-from .box_heads.multibox_head import MultiBoxHeads
+from ..modules.peleenet import BasicConv2d, peleenet_v1
+
+from .backbone_utils import Backbone
+from .multibox_head import MultiBoxHeads
 
 
 class Pelee(nn.Module):

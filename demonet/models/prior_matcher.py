@@ -3,10 +3,7 @@ import torch.nn as nn
 
 from torchvision.ops.boxes import box_iou
 
-from ..box_heads.box_utils import (
-    xywha_to_xyxy,
-    xyxy_to_xywha,
-)
+from ..utils.box_ops import xywha_to_xyxy, xyxy_to_xywha
 
 
 class PriorMatcher(nn.Module):

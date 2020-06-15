@@ -3,8 +3,8 @@ import torch.nn as nn
 
 from torchvision.models.mobilenet import InvertedResidual, mobilenet_v2
 
-from .backbone.backbone_utils import Backbone
-from .box_heads.multibox_head import MultiBoxHeads
+from .backbone_utils import Backbone
+from .multibox_head import MultiBoxHeads
 
 
 class SSDLiteWithMobileNetV2(nn.Module):

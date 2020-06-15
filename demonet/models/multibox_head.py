@@ -5,10 +5,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torchvision
 
-from ..priors_generator.prior_box import PriorBoxGenerator
-from ..priors_generator.anchor_utils import PriorMatcher, decode
+from ..utils.box_ops import hard_negative_mining
 
-from .box_utils import hard_negative_mining
+from .prior_box import PriorBoxGenerator
+from .prior_matcher import PriorMatcher, decode
 
 
 class MultiBoxHeads(nn.Module):
