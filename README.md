@@ -28,7 +28,7 @@ That's it, should be good to train and evaluate detection models.
 
 ## Pretrained Models
 
-We provide [`ssd_lite_mobilenet_v2`](https://drive.google.com/file/d/1kxHTaxABJJuwxNsB10eAxkGRqLUnGXtL/view) pretrained models, with map 0.684 on VOC2007 test subset (Training using VOC2007 and VOC2012 trainval subset).
+We provide [`ssd_lite_mobilenet_v2`](models/ssd_mobilenet.py) pretrained model [weights](https://drive.google.com/file/d/1kxHTaxABJJuwxNsB10eAxkGRqLUnGXtL/view), with map 0.684 on VOC2007 test subset (Training using VOC2007 and VOC2012 trainval subset).
 
 ```
 AP for aeroplane = 0.6822
