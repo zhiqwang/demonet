@@ -73,14 +73,9 @@ When you are using PASCAL VOC format, we expect the directory structure to be th
 .
 └── data-bin
     └── [data-path]
-        ├── VOC2007
-        │   ├── Annotations
-        │   ├── ImageSets
-        │   └── JPEGImages
-        └── VOC2012
-            ├── Annotations
-            ├── ImageSets
-            └── JPEGImages
+        └── VOCdevkit
+            ├── VOC2007
+            └── VOC2012
 ```
 
 ## Training
