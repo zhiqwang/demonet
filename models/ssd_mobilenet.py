@@ -3,21 +3,23 @@ import torch.nn as nn
 
 from torchvision.models.mobilenet import InvertedResidual, mobilenet_v2
 
-from .backbone_utils import Backbone
+from util.misc import is_main_process
+
+from .backbone import BackboneBase
 from .multibox_head import MultiBoxHeads
 
 
 class SSDLiteWithMobileNetV2(nn.Module):
     r"""MobileNet V2 SSD model class
     Args:
-        body: MobileNet V2 body layers
+        backbone: MobileNet V2 backbone layers
         extras: extra layers
         head: "multibox head" consists of loc and conf conv layers
     """
-    def __init__(self, body, extras, head, **kwargs):
+    def __init__(self, backbone, extras, head, **kwargs):
         super().__init__()
 
-        self.features = body.features
+        self.features = backbone.body.features
         self.extras = nn.ModuleList(extras)
         self.loc_conv = nn.ModuleList(head[0])
         self.conf_conv = nn.ModuleList(head[1])
@@ -74,19 +76,21 @@ class SSDLiteWithMobileNetV2(nn.Module):
         return self.eager_outputs(detector_losses, detections)
 
 
-def build_backbone(pretrained=True, trainable_layers=1):
+def build_backbone(train_backbone=True):
     """
-    Constructs a specified PeleeNet backbone. Freezes the specified number of layers in the backbone.
+    Constructs a specified MobileNet backbone. Freezes the specified number of layers in the backbone.
 
     Arguments:
-        pretrained (bool): If True, returns a model with backbone pre-trained on Imagenet
-        trainable_layers (int): number of trainable (not frozen) peleenet layers starting from final block.
+        train_pretrained (bool): If True, returns a model with backbone pre-trained on Imagenet
     """
-    backbone = mobilenet_v2(pretrained=pretrained)
-    return_layers = {'features': '0'}
-    model = Backbone(backbone, return_layers)
 
-    return model.body
+    backbone = mobilenet_v2(pretrained=is_main_process())
+    return_layers = {"features": "0"}
+    num_channels = 1280
+
+    backbone = BackboneBase(backbone, return_layers, train_backbone, num_channels)
+
+    return backbone
 
 
 def build_extras(in_channels):
@@ -141,15 +145,14 @@ def build(args):
             "MobileNetV2SSD300 (image_size=300) is supported!".format(args.image_size),
         )
 
-    pretrained_backbone = False if args.pretrained else True
-    body_layers = build_backbone(pretrained=pretrained_backbone)
-    extras_layers = build_extras(1280)
+    backbone = build_backbone(train_backbone=True)
+    extras_layers = build_extras(backbone.num_channels)
 
     anchor_nms_cfg = [6, 6, 6, 6, 6, 6]  # number of boxes per feature map location
     head_layers = build_multibox(anchor_nms_cfg, args.num_classes)
 
     model = SSDLiteWithMobileNetV2(
-        body_layers,
+        backbone,
         extras_layers,
         head_layers,
         score_thresh=args.score_thresh,

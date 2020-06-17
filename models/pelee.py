@@ -3,8 +3,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from modules.peleenet import BasicConv2d, peleenet_v1
+from util.misc import is_main_process
 
-from .backbone_utils import Backbone
+from .backbone import BackboneBase
 from .multibox_head import MultiBoxHeads
 
 
@@ -12,15 +13,15 @@ class Pelee(nn.Module):
     r"""Pelee model class, based on
     `"Pelee: A Real-Time Object Detection System on Mobile Devices" <https://arxiv.org/pdf/1804.06882.pdf>`
     Args:
-        body: PeleeNet body layers
+        backbone: PeleeNet backbone layers
         extras: extra layers
         resblock: res block layers that feed to multibox loc and conf layers
         head: "multibox head" consists of loc and conf conv layers
     """
-    def __init__(self, body, extras, resblock, head, **kwargs):
+    def __init__(self, backbone, extras, resblock, head, **kwargs):
         super().__init__()
 
-        self.features = body.features
+        self.features = backbone.body.features
 
         self.extras = nn.ModuleList(extras)
         self.resblock = nn.ModuleList(resblock)
@@ -78,29 +79,21 @@ class Pelee(nn.Module):
         return self.eager_outputs(detector_losses, detections)
 
 
-def build_backbone(pretrained=True, trainable_layers=1):
+def build_backbone(train_backbone=True):
     """
     Constructs a specified PeleeNet backbone. Freezes the specified number of layers in the backbone.
 
     Arguments:
-        pretrained (bool): If True, returns a model with backbone pre-trained on Imagenet
-        trainable_layers (int): number of trainable (not frozen) peleenet layers starting from final block.
+        train_pretrained (bool): If True, returns a model with backbone pre-trained on Imagenet
     """
-    backbone = peleenet_v1(pretrained=pretrained)
 
-    # select layers that wont be frozen
-    assert trainable_layers == 1
-    layers_to_train = ['features']
-    # freeze layers only if pretrained backbone is used
-    for name, parameter in backbone.named_parameters():
-        if all([not name.startswith(layer) for layer in layers_to_train]):
-            parameter.requires_grad_(False)
+    backbone = peleenet_v1(pretrained=is_main_process())
+    return_layers = {"features": "0"}
+    num_channels = 704
 
-    return_layers = {'features': '0'}
+    backbone = BackboneBase(backbone, return_layers, train_backbone, num_channels)
 
-    model = Backbone(backbone, return_layers)
-
-    return model.body
+    return backbone
 
 
 class ConvReLU(nn.Module):
@@ -195,16 +188,15 @@ def build(args):
             "Pelee304 (image_size=304) is supported!".format(args.image_size),
         )
 
-    pretrained_backbone = False if args.pretrained else True
-    body_layers = build_backbone(pretrained=pretrained_backbone)
-    extras_layers = build_extras(704, batch_norm=True)
+    backbone = build_backbone(train_backbone=True)
+    extras_layers = build_extras(backbone.num_channels, batch_norm=True)
     nchannels = [512, 704, 256, 256, 256]
     anchor_nms_cfg = [6, 6, 6, 6, 6]  # number of boxes per feature map location
     resblock_layers = build_resblock(nchannels)
     head_layers = build_multibox(anchor_nms_cfg, args.num_classes)
 
     model = Pelee(
-        body_layers,
+        backbone,
         extras_layers,
         resblock_layers,
         head_layers,
