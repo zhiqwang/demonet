@@ -10,21 +10,27 @@ PyTorch training code and models reimplentation for object detection as describe
 - The implementation of `ssd_lite_mobilenet_v2` borrow the code from [pytorch-ssd](https://github.com/qfgaohao/pytorch-ssd).
 
 # Usage
+
 There are no extra compiled components in DEMONET and package dependencies are minimal, so the code is very simple to use. We provide instructions how to install dependencies via conda. First, clone the repository locally:
+
 ```
 git clone https://github.com/vanillapi/demonet.git
 ```
+
 Then, install PyTorch 1.5+ and torchvision 0.6+:
+
 ```
 conda install -c pytorch pytorch torchvision
 ```
+
 Install pycocotools (for evaluation on COCO) and scipy (for training):
+
 ```
 conda install cython scipy
 pip install -U 'git+https://github.com/cocodataset/cocoapi.git#subdirectory=PythonAPI'
 ```
-That's it, should be good to train and evaluate detection models.
 
+That's it, should be good to train and evaluate detection models.
 
 ## Pretrained Models
 
@@ -57,25 +63,23 @@ Average Precision Across All Classes = 0.6839
 
 ## Data preparation
 
-Support trainint with COCO and PASCAL VOC format (chosen with the parameter `--dataset-file [coco/voc]`). It's recommended to symlink the dataset root to `./data-bin`. With COCO format we expect the directory structure to be the following:
+Support trainint with COCO and PASCAL VOC format (chosen with the parameter `--dataset-file [coco/voc]`). With COCO format we expect the directory structure to be the following:
 
 ```
 .
-└── data-bin
-    └── [data-path]
-        ├── annotations
-        └── images
+└── path/to/data-path/
+    ├── annotations  # annotation json files
+    └── images       # root path of images
 ```
 
 When you are using PASCAL VOC format, we expect the directory structure to be the following:
 
 ```
 .
-└── data-bin
-    └── [data-path]
-        └── VOCdevkit
-            ├── VOC2007
-            └── VOC2012
+└── path/to/data-path/
+    └── VOCdevkit
+        ├── VOC2007
+        └── VOC2012
 ```
 
 ## Training
@@ -88,7 +92,7 @@ CUDA_VISIBLE_DEVICES=[GPU_ID] python -m train \
     --train-set trainval \
     --val-set test \
     --dataset-year 2007 2012 \
-    --data-path [DATA_PATH] \
+    --data-path path/to/data-path/ \
     --output-dir [CHECKPOINT_PATH] \
     --epochs [NUM_EPOCHS] \
     --num-classes [NUM_CLASSES] \
@@ -107,7 +111,7 @@ CUDA_VISIBLE_DEVICES=[GPU_ID] python -m eval_voc \
     --dataset-file voc \
     --val-set test \
     --dataset-year 2007 \
-    --data-path [VOC_DEVKIT_ROOT_PATH] \
+    --data-path path/to/data-path/ \
     --num-classes [NUM_CLASSES] \
     --batch-size 32 \
     --resume [CHECKPOINT_PATH] \
@@ -124,7 +128,7 @@ CUDA_VISIBLE_DEVICES=[GPU_ID] python -m train \
     --dataaset-mode pascal \
     --val-set test \
     --dataset-year 2007 \
-    --data-path [DATA_PATH] \
+    --data-path path/to/data-path/ \
     --resume [CHECKPOINT_PATH] \
     --num-classes [NUM_CLASSES] \
     --batch-size 32 \
