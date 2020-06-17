@@ -4,11 +4,6 @@ PyTorch training code and models reimplentation for object detection as describe
 
 ![Example of SSD Lite with mobilenet v2 backbone](.github/demo.png)
 
-## About the code
-
-- This repo borrows the architecture design and part of the code from [DETR](https://github.com/facebookresearch/detr).
-- The implementation of `ssd_lite_mobilenet_v2` borrow the code from [pytorch-ssd](https://github.com/qfgaohao/pytorch-ssd).
-
 # Usage
 
 There are no extra compiled components in DEMONET and package dependencies are minimal, so the code is very simple to use. We provide instructions how to install dependencies via conda. First, clone the repository locally:
@@ -125,7 +120,7 @@ CUDA_VISIBLE_DEVICES=[GPU_ID] python -m train \
     --arch ssd_lite_mobilenet_v2 \
     --image-size 300 \
     --dataset-file coco \
-    --dataaset-mode pascal \
+    --dataset-mode pascal \
     --val-set test \
     --dataset-year 2007 \
     --data-path path/to/data-path/ \
@@ -134,3 +129,8 @@ CUDA_VISIBLE_DEVICES=[GPU_ID] python -m train \
     --batch-size 32 \
     --test-only
 ```
+
+## About the code
+
+- This repo borrows the architecture design and part of the code from [DETR](https://github.com/facebookresearch/detr).
+- The implementation of `ssd_lite_mobilenet_v2` borrow the code from [pytorch-ssd](https://github.com/qfgaohao/pytorch-ssd).
