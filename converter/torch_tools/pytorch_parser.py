@@ -3,9 +3,9 @@
 
 import math
 import numpy as np
-from converter.core.parser import Parser
-from converter.pytorch.pytorch_graph import PytorchGraph
-import converter.caffe_tools.proto.caffe_pb2 as pb2
+from converter.common.parser import Parser
+from converter.torch_tools.pytorch_graph import PytorchGraph
+from converter.caffe_tools.proto import caffe_pb2
 
 
 global caffe_net
@@ -14,7 +14,7 @@ caffe_net = []
 
 
 def as_blob(array):
-    blob = pb2.BlobProto()
+    blob = caffe_pb2.BlobProto()
     blob.shape.dim.extend(array.shape)
     blob.data.extend(array.astype(float).flat)
     return blob
@@ -125,13 +125,13 @@ class PytorchParser(Parser):
             else:
                 self.rename_UNKNOWN(current_node)
 
-        text_net = pb2.NetParameter()
+        text_net = caffe_pb2.NetParameter()
 
-        binary_weights = pb2.NetParameter()
+        binary_weights = caffe_pb2.NetParameter()
         binary_weights.CopyFrom(text_net)
         for layer in caffe_net:
             binary_weights.layer.extend([layer])
-            layer_proto = pb2.LayerParameter()
+            layer_proto = caffe_pb2.LayerParameter()
             layer_proto.CopyFrom(layer)
             del layer_proto.blobs[:]
             text_net.layer.extend([layer_proto])
@@ -155,9 +155,9 @@ class PytorchParser(Parser):
               % (source_node.type, source_node.name))
 
     def rename_Data(self):
-        layer = pb2.LayerParameter()
+        layer = caffe_pb2.LayerParameter()
         layer.type = 'Input'
-        input_shape = pb2.BlobShape()
+        input_shape = caffe_pb2.BlobShape()
         input_shape.dim.extend(self.input_shape)
         layer.input_param.shape.extend([input_shape])
         layer.top.append("data")
@@ -168,7 +168,7 @@ class PytorchParser(Parser):
 
         attr = source_node.attrs
         kwargs = dict()
-        layer = pb2.LayerParameter()
+        layer = caffe_pb2.LayerParameter()
 
         layer.type = "Convolution"
         # dilation
@@ -257,7 +257,7 @@ class PytorchParser(Parser):
     def rename_PRelu(self, source_node):
         # attr = source_node.attrs
         # kwargs = dict()
-        layer = pb2.LayerParameter()
+        layer = caffe_pb2.LayerParameter()
         layer.type = "PReLU"
 
         # bias_name = '{0}.bias'.format(source_node.weights_name)
@@ -283,10 +283,10 @@ class PytorchParser(Parser):
     def rename_MaxPooling(self, source_node):
         attr = source_node.attrs
         kwargs = dict()
-        layer = pb2.LayerParameter()
+        layer = caffe_pb2.LayerParameter()
         layer.type = "Pooling"
 
-        layer.pooling_param.pool = pb2.PoolingParameter.MAX
+        layer.pooling_param.pool = caffe_pb2.PoolingParameter.MAX
 
         if len(attr['padding']) == 4:
             kwargs['padding'] = [0] + attr['padding'][0:2] + [0, 0] + attr['padding'][2:] + [0]
@@ -347,10 +347,10 @@ class PytorchParser(Parser):
     def rename_AvgPooling(self, source_node):
         attr = source_node.attrs
         kwargs = dict()
-        layer = pb2.LayerParameter()
+        layer = caffe_pb2.LayerParameter()
         layer.type = "Pooling"
 
-        layer.pooling_param.pool = pb2.PoolingParameter.AVE
+        layer.pooling_param.pool = caffe_pb2.PoolingParameter.AVE
 
         if len(attr['padding']) == 4:
             kwargs['padding'] = [0] + attr['padding'][0:2] + [0, 0] + attr['padding'][2:] + [0]
@@ -409,7 +409,7 @@ class PytorchParser(Parser):
         return layer
 
     def rename_Sigmoid(self, source_node):
-        layer = pb2.LayerParameter()
+        layer = caffe_pb2.LayerParameter()
         layer.type = "Sigmoid"
 
         for b in source_node.in_edges:
@@ -423,7 +423,7 @@ class PytorchParser(Parser):
     def rename_BatchNormalization(self, source_node):
         attr = source_node.attrs
 
-        layer_bn = pb2.LayerParameter()
+        layer_bn = caffe_pb2.LayerParameter()
         layer_bn.type = "BatchNorm"
 
         layer_bn.batch_norm_param.use_global_stats = 1
@@ -444,7 +444,7 @@ class PytorchParser(Parser):
 
         layer_bn.name = source_node.real_name + '_bn'
 
-        layer_scale = pb2.LayerParameter()
+        layer_scale = caffe_pb2.LayerParameter()
         layer_scale.type = "Scale"
 
         bias_name = '{0}.bias'.format(source_node.weights_name)
@@ -470,7 +470,7 @@ class PytorchParser(Parser):
         # return layer_bn
 
     def rename_Relu(self, source_node):
-        layer = pb2.LayerParameter()
+        layer = caffe_pb2.LayerParameter()
         layer.type = "ReLU"
 
         for b in source_node.in_edges:
@@ -484,10 +484,10 @@ class PytorchParser(Parser):
     def rename_MaxPool(self, source_node):
         attr = source_node.attrs
         kwargs = dict()
-        layer = pb2.LayerParameter()
+        layer = caffe_pb2.LayerParameter()
         layer.type = "Pooling"
 
-        layer.pooling_param.pool = pb2.PoolingParameter.MAX
+        layer.pooling_param.pool = caffe_pb2.PoolingParameter.MAX
 
         if len(attr['pads']) == 4:
             kwargs['pads'] = [0] + attr['pads'][0:2] + [0, 0] + attr['pads'][2:] + [0]
@@ -559,7 +559,7 @@ class PytorchParser(Parser):
     def rename_Add(self, source_node):
         # attr = source_node.attrs
 
-        layer = pb2.LayerParameter()
+        layer = caffe_pb2.LayerParameter()
         layer.type = "Eltwise"
 
         for b in source_node.in_edges:
@@ -573,10 +573,10 @@ class PytorchParser(Parser):
     def rename_AveragePool(self, source_node):
         attr = source_node.attrs
         kwargs = dict()
-        layer = pb2.LayerParameter()
+        layer = caffe_pb2.LayerParameter()
         layer.type = "Pooling"
 
-        layer.pooling_param.pool = pb2.PoolingParameter.AVE
+        layer.pooling_param.pool = caffe_pb2.PoolingParameter.AVE
 
         if len(attr['pads']) == 4:
             kwargs['pads'] = [0] + attr['pads'][0:2] + [0, 0] + attr['pads'][2:] + [0]
@@ -636,7 +636,7 @@ class PytorchParser(Parser):
 
     def rename_Flatten(self, source_node):
         # attr = source_node.attrs
-        layer = pb2.LayerParameter()
+        layer = caffe_pb2.LayerParameter()
         layer.type = "Flatten"
 
         for b in source_node.in_edges:
@@ -650,7 +650,7 @@ class PytorchParser(Parser):
     def rename_FullyConnected(self, source_node):
         # attr = source_node.attrs
 
-        layer = pb2.LayerParameter()
+        layer = caffe_pb2.LayerParameter()
         layer.type = "InnerProduct"
 
         bias_name = '{0}.bias'.format(source_node.weights_name)
@@ -686,11 +686,11 @@ class PytorchParser(Parser):
 
     def rename_Dropout(self, source_node):
         attr = source_node.attrs
-        layer = pb2.LayerParameter()
+        layer = caffe_pb2.LayerParameter()
         layer.type = "Dropout"
         layer.dropout_param.dropout_ratio = attr['ratio']
-        # train_only = pb2.NetStateRule()
-        # train_only.phase = pb2.TEST
+        # train_only = caffe_pb2.NetStateRule()
+        # train_only.phase = caffe_pb2.TEST
         # layer.exclude.extend([train_only])
 
         for b in source_node.in_edges:
@@ -704,8 +704,8 @@ class PytorchParser(Parser):
     def rename_Softmax(self, source_node):
         # attr = source_node.attrs
 
-        layer = pb2.LayerParameter()
-        layer.type = 'Softmax'
+        layer = caffe_pb2.LayerParameter()
+        layer.type = "Softmax"
 
         for b in source_node.in_edges:
             layer.bottom.append(b)
@@ -718,7 +718,7 @@ class PytorchParser(Parser):
     def rename_Permute(self, source_node):
         attr = source_node.attrs
         # kwargs = dict()
-        layer = pb2.LayerParameter()
+        layer = caffe_pb2.LayerParameter()
         layer.type = "Permute"
 
         if len(attr['perm']) == 4:
@@ -738,7 +738,7 @@ class PytorchParser(Parser):
 
     def rename_Constant(self, source_node):
         # kwargs = dict()
-        layer = pb2.LayerParameter()
+        layer = caffe_pb2.LayerParameter()
         layer.type = "Normalize"
 
         layer.norm_param.across_spatial = False
@@ -765,7 +765,7 @@ class PytorchParser(Parser):
 
     def rename_Upsample(self, source_node):
         attr = source_node.attrs
-        layer = pb2.LayerParameter()
+        layer = caffe_pb2.LayerParameter()
         layer.type = "Deconvolution"
 
         assert attr['height_scale'] == attr['width_scale']
@@ -781,7 +781,7 @@ class PytorchParser(Parser):
         layer.convolution_param.weight_filler.type = 'bilinear'
         layer.convolution_param.bias_term = False
 
-        learning_param = pb2.ParamSpec()
+        learning_param = caffe_pb2.ParamSpec()
         learning_param.lr_mult = 0
         learning_param.decay_mult = 0
         layer.param.extend([learning_param])
@@ -800,7 +800,7 @@ class PytorchParser(Parser):
 
     def rename_Concat(self, source_node):
         attr = source_node.attrs
-        layer = pb2.LayerParameter()
+        layer = caffe_pb2.LayerParameter()
         layer.type = "Concat"
         layer.concat_param.axis = attr['axis']
 
@@ -814,7 +814,7 @@ class PytorchParser(Parser):
 
     def rename_Reshape(self, source_node):
         attr = source_node.attrs
-        layer = pb2.LayerParameter()
+        layer = caffe_pb2.LayerParameter()
         print(attr)
         layer.type = "Reshape"
 

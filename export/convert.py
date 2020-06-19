@@ -1,7 +1,7 @@
 import torch
 
-from converter.pytorch.pytorch_parser import PytorchParser
-from brocolli.modeling.backbone.peleenet import build_model
+from converter.torch_tools.pytorch_parser import PytorchParser
+from hubconf import ssd_lite_mobilenet_v2
 
 
 def main(args):
@@ -9,31 +9,29 @@ def main(args):
 
     device = torch.device('cpu')
 
-    model = build_model(
-        size=args.image_size,
+    model = ssd_lite_mobilenet_v2(
+        pretrained=True,
         num_classes=args.num_classes,
+        image_size=300,
     )
     model.eval()
     model.to(device)
 
-    checkpoint = torch.load(args.resume, map_location='cpu')
-    model.load_state_dict(checkpoint['model'], strict=False)
-    # dummy_input = torch.ones([1, 3, 304, 304])
+    # dummy_input = torch.ones([1, 3, 300, 300])
 
-    pytorch_parser = PytorchParser(model, [3, 304, 304])
+    pytorch_parser = PytorchParser(model, [3, 300, 300])
     pytorch_parser.run(args.output_path)
 
 
 def parse_args():
     import argparse
     parser = argparse.ArgumentParser(description='pytorch ssd converter')
-    parser.add_argument('--arch', default='ssd',
+    parser.add_argument('--arch', default='ssd_lite_mobilenet_v2',
                         help='model architecture: {} (default: ssd)')
-    parser.add_argument('--image-size', default=304, type=int,
+    parser.add_argument('--image-size', default=300, type=int,
                         help='input size of models')
-    parser.add_argument('--num-classes', default=4, type=int,
+    parser.add_argument('--num-classes', default=21, type=int,
                         help='number classes of datasets')
-    parser.add_argument('--config', default='./ssd/config/Pelee_COCO.py')
     parser.add_argument('--device', default='cpu',
                         help='device')
     parser.add_argument('--resume', default=None,
