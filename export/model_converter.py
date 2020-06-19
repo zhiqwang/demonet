@@ -12,9 +12,9 @@ import traceback
 import torch.nn.functional as F
 from torch.nn.modules.utils import _pair
 
-from ..conversion.caffe import caffe_net
-from ..conversion.caffe.proto import caffe_pb2
-from ..conversion.caffe.layer_param import Layer_param
+from converter.caffe_tools import caffe_net
+from converter.caffe_tools.proto import caffe_pb2
+from converter.caffe_tools.layer_param import Layer_param
 
 NET_INITTED = False
 

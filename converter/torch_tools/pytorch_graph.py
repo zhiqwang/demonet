@@ -7,7 +7,7 @@ import torch
 import torch.jit
 from torch.jit import _unique_state_dict
 
-from converter.common.graph import GraphNode, Graph
+from ..common.graph import GraphNode, Graph
 
 
 class PytorchGraphNode(GraphNode):

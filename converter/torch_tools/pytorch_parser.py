@@ -3,9 +3,11 @@
 
 import math
 import numpy as np
-from converter.common.parser import Parser
-from converter.torch_tools.pytorch_graph import PytorchGraph
-from converter.caffe_tools.proto import caffe_pb2
+
+from ..common.parser import Parser
+from ..caffe_tools.proto import caffe_pb2
+
+from .pytorch_graph import PytorchGraph
 
 
 global caffe_net
