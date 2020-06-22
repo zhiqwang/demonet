@@ -18,14 +18,10 @@ class PytorchGraphNode(GraphNode):
         import re
         node_id = re.search(r"[\d]+", layer.__str__())
         self.id = node_id.group(0)
+        super().__init__(layer)
 
-        super(PytorchGraphNode, self).__init__(layer)
-        if "L2Norm" not in self.name:
-            self.attrs = {k: layer[k] for k in layer.attributeNames()}
-
-        self.weights_name = '.'.join(
-            re.findall(r'\[([\w\d.]+)\]', self._name)
-        )
+        self.attrs = {k: layer[k] for k in layer.attributeNames()}
+        self.weights_name = '.'.join(re.findall(r'\[([\w\d.]+)\]', self._name))
 
     @property
     def name(self):
@@ -50,7 +46,7 @@ class PytorchGraph(Graph):
 
     def __init__(self, model):
         # sanity check.
-        super(PytorchGraph, self).__init__(model)
+        super().__init__(model)
         self.model = model
         self.state_dict = _unique_state_dict(model)
         self.shape_dict = dict()
