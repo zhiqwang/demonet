@@ -1,5 +1,3 @@
-import numpy as np
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -167,10 +165,10 @@ class MultiBoxHeads(nn.Module):
         top_boxes = det_boxes[top_indices, :]
 
         prediction = {}
-        prediction['labels'] = np.array([t.item() for t in top_label], dtype=np.int64)
-        prediction['scores'] = np.array([t.item() for t in top_conf], dtype=np.float32)
-        top_boxes.clamp_(min=0.0, max=1.0)
-        prediction['boxes'] = top_boxes.cpu().numpy().tolist()
+
+        prediction['labels'] = top_label
+        prediction['scores'] = top_conf
+        prediction['boxes'] = torch.clamp(top_boxes, min=0.0, max=1.0)
 
         return prediction
 

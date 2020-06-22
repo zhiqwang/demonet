@@ -69,16 +69,20 @@ def evaluate(model, data_loader, device, output_dir):
         for target, output in zip(targets, outputs):
             image_index.append(''.join([chr(i) for i in target['filename'].tolist()]))
 
-            # The output of models has converted to numpy
-            orig_target_sizes = target["orig_size"].cpu().numpy()
+            orig_target_sizes = target['orig_size'].cpu().numpy()
             orig_target_sizes = np.tile(orig_target_sizes[1::-1], 2)
 
-            output["boxes"] = [(box * orig_target_sizes) for box in output["boxes"]]
+            # Convert the output of models to numpy
+            boxes = output['boxes'].tolist()
+            labels = output['labels'].tolist()
+            scores = output['scores'].tolist()
+
+            boxes = [(box * orig_target_sizes) for box in boxes]
 
             image_boxes = [[] for i in range(len(cls_names))]
-            for i, box in enumerate(output["boxes"]):
-                cls_dets = np.hstack((box, output["scores"][i]))
-                image_boxes[output["labels"][i]].append(cls_dets)
+            for i, box in enumerate(boxes):
+                cls_dets = np.hstack((box, scores[i]))
+                image_boxes[labels[i]].append(cls_dets)
 
             for i in range(len(cls_names)):
                 if image_boxes[i] != []:

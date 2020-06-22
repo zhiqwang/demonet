@@ -12,6 +12,8 @@ import contextlib
 import numpy as np
 import copy
 
+import torch
+
 from pycocotools.cocoeval import COCOeval
 from pycocotools.coco import COCO
 
@@ -82,7 +84,7 @@ class CocoEvaluator(object):
                 continue
 
             boxes = prediction["boxes"]
-            boxes = xyxy_to_xywh(boxes)
+            boxes = xyxy_to_xywh(boxes).tolist()
             scores = prediction["scores"].tolist()
             labels = prediction["labels"].tolist()
 
@@ -101,12 +103,9 @@ class CocoEvaluator(object):
 
 
 def xyxy_to_xywh(boxes):
-    bbox = []
-    for box in boxes:
-        # BoxMode: convert from XYXY_ABS to XYWH_ABS
-        box[2:] -= box[:2]
-        bbox.append(box.tolist())
-    return bbox
+    # BoxMode: convert from XYXY_ABS to XYWH_ABS
+    xmin, ymin, xmax, ymax = boxes.unbind(1)
+    return torch.stack((xmin, ymin, xmax - xmin, ymax - ymin), dim=1)
 
 
 def merge(img_ids, eval_imgs):
