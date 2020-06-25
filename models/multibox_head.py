@@ -5,7 +5,7 @@ import torchvision
 
 from util.box_ops import hard_negative_mining
 
-from .prior_box import PriorBoxGenerator
+from .prior_box import AnchorGenerator
 from .prior_matcher import PriorMatcher, decode
 
 
@@ -21,14 +21,14 @@ class MultiBoxHeads(nn.Module):
         top_k=100,
         # prior box
         image_size=300,
-        aspect_ratios=[[2], [2, 3], [2, 3], [2, 3], [2], [2]],
-        feature_maps=[38, 19, 10, 5, 3, 1],
+        aspect_ratios=[[2, 3], [2, 3], [2, 3], [2, 3], [2, 3], [2, 3]],
+        feature_maps=[19, 10, 5, 3, 2, 1],
         min_ratio=20,
-        max_ratio=90,
-        steps=[8, 16, 32, 64, 100, 300],
+        max_ratio=80,
+        steps=[16, 32, 64, 100, 150, 300],
         clip=False,
-        min_sizes=None,
-        max_sizes=None,
+        min_sizes=[60, 105, 150, 195, 240, 285],
+        max_sizes=[105, 150, 195, 240, 285, 330],
     ):
         super().__init__()
         self.variances = variances
@@ -72,7 +72,7 @@ class MultiBoxHeads(nn.Module):
 
     def prior_generator(self):
 
-        priors = PriorBoxGenerator(
+        priors = AnchorGenerator(
             image_size=self.image_size,
             aspect_ratios=self.aspect_ratios,
             feature_maps=self.feature_maps,
