@@ -37,31 +37,23 @@ class AnchorGenerator(nn.Module):
         self.image_size = image_size
         self.min_ratio = min_ratio
         self.max_ratio = max_ratio
+        self.feature_maps = feature_maps
+        self.feature_sizes = len(feature_maps)
+
         if min_sizes is not None:
             self.min_sizes, self.max_sizes = min_sizes, max_sizes
         else:
             self.min_sizes, self.max_sizes = self.compute_sizes()
-
         assert len(self.min_sizes) == len(self.max_sizes)
 
-        self.aspect_ratios = aspect_ratios
-        self.feature_maps = feature_maps
-        self.feature_sizes = len(feature_maps)
+        self.steps = tuple((s,) for s in steps)
+        self.sizes = tuple((s,) for s in self.min_sizes)
+        assert len(self.sizes) == len(self.steps)
 
-        self.steps = steps
+        self.aspect_ratios = self.compute_ratios(aspect_ratios)
+        assert len(self.sizes) == len(self.aspect_ratios)
+
         self.clip = clip
-
-        # assert len(self.sizes) == len(self.aspect_ratios)
-        # assert len(self.sizes) == len(self.steps)
-
-        sizes = [60, 105, 150, 195, 240, 285]
-        if not isinstance(sizes[0], (list, tuple)):
-            # TODO change this
-            sizes = tuple((s,) for s in sizes)
-        if not isinstance(aspect_ratios[0], (list, tuple)):
-            aspect_ratios = (aspect_ratios,) * len(sizes)
-        self.sizes = sizes
-
         self.cell_anchors = None
         self._cache = {}
 
@@ -81,6 +73,19 @@ class AnchorGenerator(nn.Module):
             max_sizes = [self.image_size * 15 / 100.] + max_sizes
 
         return min_sizes, max_sizes
+
+    def compute_ratios(self, aspect_ratios):
+        ratios = []
+        for k, aspect_ratio in enumerate(aspect_ratios):
+            ratio = [1.0]
+            extra = self.max_sizes[k] / self.min_sizes[k]
+            ratio.append(extra)  # extra prior
+            for r in aspect_ratio:
+                ratio.append(r)
+                ratio.append(1 / r)
+            ratios.append(ratio)
+
+        return tuple(tuple(ratio) for ratio in ratios)
 
     def _compute_num_priors(self):
         num_priors = 0
