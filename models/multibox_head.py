@@ -22,7 +22,6 @@ class MultiBoxHeads(nn.Module):
         # prior box
         image_size=300,
         aspect_ratios=[[2, 3], [2, 3], [2, 3], [2, 3], [2, 3], [2, 3]],
-        feature_maps=[19, 10, 5, 3, 2, 1],
         min_ratio=20,
         max_ratio=80,
         steps=[16, 32, 64, 100, 150, 300],
@@ -39,7 +38,6 @@ class MultiBoxHeads(nn.Module):
 
         self.image_size = image_size
         self.aspect_ratios = aspect_ratios
-        self.feature_maps = feature_maps
         self.min_ratio = min_ratio
         self.max_ratio = max_ratio
         self.steps = steps
@@ -50,10 +48,10 @@ class MultiBoxHeads(nn.Module):
         self.build_priors = self.prior_generator()
         self.build_matcher = PriorMatcher(variances, iou_threshold)
 
-    def forward(self, loc, conf, targets):
+    def forward(self, loc, conf, feature_maps, targets):
         loc = loc.view(loc.shape[0], -1, 4)  # loc preds
         conf = conf.view(conf.shape[0], loc.shape[1], -1)  # conf preds
-        priors = self.build_priors().to(loc.device)
+        priors = self.build_priors(feature_maps)
 
         predictions = None
         losses = {}
@@ -75,7 +73,6 @@ class MultiBoxHeads(nn.Module):
         priors = AnchorGenerator(
             image_size=self.image_size,
             aspect_ratios=self.aspect_ratios,
-            feature_maps=self.feature_maps,
             min_ratio=self.min_ratio,
             max_ratio=self.max_ratio,
             steps=self.steps,

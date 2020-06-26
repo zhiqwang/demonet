@@ -74,7 +74,7 @@ class Pelee(nn.Module):
         loc = torch.cat([o.view(o.size(0), -1) for o in loc], 1)
         conf = torch.cat([o.view(o.size(0), -1) for o in conf], 1)
 
-        detections, detector_losses = self.multibox_heads(loc, conf, targets)
+        detections, detector_losses = self.multibox_heads(loc, conf, sources, targets)
 
         return self.eager_outputs(detector_losses, detections)
 
@@ -203,7 +203,6 @@ def build(args):
         score_thresh=args.score_thresh,
         image_size=args.image_size,
         aspect_ratios=[[2, 3], [2, 3], [2, 3], [2, 3], [2, 3]],
-        feature_maps=[19, 10, 5, 3, 1],
         min_ratio=15,
         max_ratio=90,
         steps=[16, 30, 60, 101, 304],

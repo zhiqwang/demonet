@@ -25,7 +25,6 @@ class AnchorGenerator(nn.Module):
         self,
         image_size=300,
         aspect_ratios=[[2, 3], [2, 3], [2, 3], [2, 3], [2, 3], [2, 3]],
-        feature_maps=[19, 10, 5, 3, 2, 1],
         min_ratio=20,
         max_ratio=80,
         steps=[16, 32, 64, 100, 150, 300],
@@ -37,7 +36,6 @@ class AnchorGenerator(nn.Module):
         self.image_size = image_size
         self.min_ratio = min_ratio
         self.max_ratio = max_ratio
-        self.feature_maps = feature_maps
 
         if min_sizes is not None:
             self.min_sizes, self.max_sizes = min_sizes, max_sizes
@@ -49,7 +47,7 @@ class AnchorGenerator(nn.Module):
         self.sizes = tuple((s,) for s in self.min_sizes)
         assert len(self.sizes) == len(self.steps)
 
-        self.aspect_ratios, self.scales_ratios = self.compute_ratios(aspect_ratios)
+        self.aspect_ratios, self.scale_ratios = self.compute_ratios(aspect_ratios)
         assert len(self.sizes) == len(self.aspect_ratios)
 
         self.clip = clip
@@ -57,7 +55,7 @@ class AnchorGenerator(nn.Module):
         self._cache = {}
 
     def compute_sizes(self):
-        step = int(math.floor(self.max_ratio - self.min_ratio) / (len(self.feature_maps) - 2))
+        step = int(math.floor(self.max_ratio - self.min_ratio) / (len(self.aspect_ratios) - 2))
         min_sizes = list()
         max_sizes = list()
         for ratio in range(self.min_ratio, self.max_ratio + 1, step):
@@ -75,43 +73,37 @@ class AnchorGenerator(nn.Module):
 
     def compute_ratios(self, aspect_ratios):
         ratios = []
-        scales_ratios = []
+        scale_ratios = []
         for k, aspect_ratio in enumerate(aspect_ratios):
             ratio = [1.0, 1.0]
             extra = self.max_sizes[k] / self.min_sizes[k]
-            scales_ratio = [1.0] * (2 + 2 * len(aspect_ratio))
-            scales_ratio[1] = extra  # scale for extra prior
+            scale_ratio = [1.0] * (2 + 2 * len(aspect_ratio))
+            scale_ratio[1] = extra  # scale for extra prior
             for r in aspect_ratio:
                 ratio.append(1 / r)
                 ratio.append(r)
 
             ratios.append(ratio)
-            scales_ratios.append(scales_ratio)
+            scale_ratios.append(scale_ratio)
 
-        assert len(ratios) == len(scales_ratios)
-        return tuple(tuple(r) for r in ratios), tuple(tuple(s) for s in scales_ratios)
-
-    def _compute_num_priors(self):
-        num_priors = 0
-        for i, feature_map in enumerate(self.feature_maps):
-            num_priors += (feature_map ** 2) * len(self.aspect_ratios[i])
-        return num_priors
+        assert len(ratios) == len(scale_ratios)
+        return tuple(tuple(r) for r in ratios), tuple(tuple(s) for s in scale_ratios)
 
     # TODO: https://github.com/pytorch/pytorch/issues/26792
     # For every (aspect_ratios, scales) combination, output a zero-centered anchor
     #   with those values in XYWHA BoxMode.
     # (scales, aspect_ratios) are usually an element of zip(self.scales, self.aspect_ratios)
     # This method assumes aspect ratio = height / width for an anchor.
-    def generate_anchors(self, scales, aspect_ratios, scales_ratios, dtype=torch.float32, device="cpu"):
+    def generate_anchors(self, scales, aspect_ratios, scale_ratios, dtype=torch.float32, device="cpu"):
         # type: (List[int], List[float], List[float], int, Device) -> Tensor  # noqa: F821
         scales = torch.as_tensor(scales, dtype=dtype, device=device)
         aspect_ratios = torch.as_tensor(aspect_ratios, dtype=dtype, device=device)
-        scales_ratios = torch.sqrt(torch.as_tensor(scales_ratios, dtype=dtype, device=device))
+        scale_ratios = torch.sqrt(torch.as_tensor(scale_ratios, dtype=dtype, device=device))
         h_ratios = torch.sqrt(aspect_ratios)
         w_ratios = 1 / h_ratios
 
-        ws = (w_ratios[:, None] * scales[None, :] * scales_ratios[:, None]).view(-1)
-        hs = (h_ratios[:, None] * scales[None, :] * scales_ratios[:, None]).view(-1)
+        ws = (w_ratios[:, None] * scales[None, :] * scale_ratios[:, None]).view(-1)
+        hs = (h_ratios[:, None] * scales[None, :] * scale_ratios[:, None]).view(-1)
 
         zeros = torch.zeros_like(ws)
         base_anchors = torch.stack([zeros, zeros, ws, hs], dim=1)
@@ -129,13 +121,11 @@ class AnchorGenerator(nn.Module):
 
         cell_anchors = [
             self.generate_anchors(
-                sizes,
-                aspect_ratios,
-                scales_ratios,
-                dtype,
-                device
+                sizes, aspect_ratios, scale_ratios, dtype, device,
             )
-            for sizes, aspect_ratios, scales_ratios in zip(self.sizes, self.aspect_ratios, self.scales_ratios)
+            for sizes, aspect_ratios, scale_ratios in zip(
+                self.sizes, self.aspect_ratios, self.scale_ratios
+            )
         ]
         self.cell_anchors = cell_anchors
 
@@ -147,20 +137,18 @@ class AnchorGenerator(nn.Module):
         cell_anchors = self.cell_anchors
         assert cell_anchors is not None
 
-        for size, stride, base_anchors in zip(
-            grid_sizes, strides, cell_anchors
-        ):
+        for size, stride, base_anchors in zip(grid_sizes, strides, cell_anchors):
             grid_height, grid_width = size
             stride_height, stride_width = stride
             device = base_anchors.device
 
             # For output anchor, compute [x_center, y_center, x_center, y_center]
-            shifts_x = (torch.arange(
-                0, grid_width, dtype=torch.float32, device=device
-            ) + 0.5) * stride_width
-            shifts_y = (torch.arange(
-                0, grid_height, dtype=torch.float32, device=device
-            ) + 0.5) * stride_height
+            shifts_x = (
+                torch.arange(0, grid_width, dtype=torch.float32, device=device) + 0.5
+            ) * stride_width
+            shifts_y = (
+                torch.arange(0, grid_height, dtype=torch.float32, device=device) + 0.5
+            ) * stride_height
             shift_y, shift_x = torch.meshgrid(shifts_y, shifts_x)
             shift_x = shift_x.reshape(-1)
             shift_y = shift_y.reshape(-1)
@@ -169,9 +157,7 @@ class AnchorGenerator(nn.Module):
 
             # For every (base anchor, output anchor) pair,
             # offset each zero-centered base anchor by the center of the output anchor.
-            anchors.append(
-                (shifts.view(-1, 1, 4) + base_anchors.view(1, -1, 4)).reshape(-1, 4)
-            )
+            anchors.append((shifts.view(-1, 1, 4) + base_anchors.view(1, -1, 4)).reshape(-1, 4))
 
         return anchors
 
@@ -184,12 +170,10 @@ class AnchorGenerator(nn.Module):
         self._cache[key] = anchors
         return anchors
 
-    def forward(self):
-
-        dtype = torch.float32
-        device = "cpu"
-
-        grid_sizes = list((s, s) for s in self.feature_maps)
+    def forward(self, feature_maps):
+        # type: (List[Tensor]) -> Tensor
+        grid_sizes = list([feature_map.shape[-2:] for feature_map in feature_maps])
+        dtype, device = feature_maps[0].dtype, feature_maps[0].device
         strides = list((s, s) for s in self.steps)
         self.set_cell_anchors(dtype, device)
         anchors_over_all_feature_maps = self.cached_grid_anchors(grid_sizes, strides)
