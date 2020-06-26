@@ -155,16 +155,17 @@ class AnchorGenerator(nn.Module):
             device = base_anchors.device
 
             # For output anchor, compute [x_center, y_center, x_center, y_center]
-            shifts_x = torch.arange(
+            shifts_x = (torch.arange(
                 0, grid_width, dtype=torch.float32, device=device
-            ) * stride_width
-            shifts_y = torch.arange(
+            ) + 0.5) * stride_width
+            shifts_y = (torch.arange(
                 0, grid_height, dtype=torch.float32, device=device
-            ) * stride_height
+            ) + 0.5) * stride_height
             shift_y, shift_x = torch.meshgrid(shifts_y, shifts_x)
             shift_x = shift_x.reshape(-1)
             shift_y = shift_y.reshape(-1)
-            shifts = torch.stack((shift_x, shift_y, shift_x, shift_y), dim=1)
+            zeros = torch.zeros_like(shift_x)
+            shifts = torch.stack((shift_x, shift_y, zeros, zeros), dim=1)
 
             # For every (base anchor, output anchor) pair,
             # offset each zero-centered base anchor by the center of the output anchor.
@@ -189,17 +190,16 @@ class AnchorGenerator(nn.Module):
         device = "cpu"
 
         grid_sizes = list((s, s) for s in self.feature_maps)
-        image_size = (300, 300)
-        strides = [[torch.tensor(image_size[0] // g[0], dtype=torch.int64, device=device),
-                    torch.tensor(image_size[1] // g[1], dtype=torch.int64, device=device)] for g in grid_sizes]
+        strides = list((s, s) for s in self.steps)
         self.set_cell_anchors(dtype, device)
         anchors_over_all_feature_maps = self.cached_grid_anchors(grid_sizes, strides)
         # anchors = torch.jit.annotate(List[torch.Tensor], [])
-        image_height, image_width = image_size
         anchors_in_image = []
         for anchors_per_feature_map in anchors_over_all_feature_maps:
             anchors_in_image.append(anchors_per_feature_map)
-        anchors = torch.cat(anchors_in_image)
+        anchors = torch.cat(anchors_in_image) / self.image_size
+        if self.clip:
+            anchors.clamp_(min=0.0, max=1.0)
         # Clear the cache in case that memory leaks.
         self._cache.clear()
         return anchors
