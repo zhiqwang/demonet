@@ -18,7 +18,6 @@ def _make_mobilenet_v2(num_classes, image_size, score_thresh=0.5):
         score_thresh=score_thresh,
         image_size=image_size,
         aspect_ratios=[[2, 3], [2, 3], [2, 3], [2, 3], [2, 3], [2, 3]],
-        feature_maps=[19, 10, 5, 3, 2, 1],
         min_ratio=20,
         max_ratio=80,
         steps=[16, 32, 64, 100, 150, 300],

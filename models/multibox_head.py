@@ -1,9 +1,9 @@
+import math
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision
-
-from util.box_ops import hard_negative_mining
 
 from .prior_box import AnchorGenerator
 from .prior_matcher import PriorMatcher, decode
@@ -48,10 +48,10 @@ class MultiBoxHeads(nn.Module):
         self.build_priors = self.prior_generator()
         self.build_matcher = PriorMatcher(variances, iou_threshold)
 
-    def forward(self, loc, conf, feature_maps, targets):
+    def forward(self, loc, conf, features, targets):
         loc = loc.view(loc.shape[0], -1, 4)  # loc preds
         conf = conf.view(conf.shape[0], loc.shape[1], -1)  # conf preds
-        priors = self.build_priors(feature_maps)
+        priors = self.build_priors(features)
 
         predictions = None
         losses = {}
@@ -83,7 +83,6 @@ class MultiBoxHeads(nn.Module):
 
         return priors
 
-    @torch.no_grad()
     def postprocess(self, loc_data, conf_data, priors):
         """
         At test time, Detect is the final layer of SSD. Decode location preds,
@@ -102,8 +101,6 @@ class MultiBoxHeads(nn.Module):
         num_priors = priors.shape[0]
         # conf_preds: batch_size x num_priors x num_classes
         conf_preds = conf_data.view(batch_size, num_priors, -1)
-        device = conf_data.device
-        priors = priors.to(device)
 
         # Decode predictions into bboxes.
         for i in range(batch_size):
@@ -207,3 +204,27 @@ def multibox_loss(
     num_pos = gt_loc.shape[0]
 
     return objectness_loss / num_pos, smooth_l1_loss / num_pos
+
+
+def hard_negative_mining(loss, targets, neg_pos_ratio):
+    """
+    It used to suppress the presence of a large number of negative prediction.
+    It works on image level not batch level.
+    For any example/image, it keeps all the positive predictions and
+        cut the number of negative predictions to make sure the ratio
+        between the negative examples and positive examples is no more
+        the given ratio for an image.
+    Args:
+        loss (batch_size, num_priors): the loss for each example.
+        targets (batch_size, num_priors): the targets.
+        neg_pos_ratio: the ratio between the negative examples and positive examples.
+    """
+    pos_mask = targets > 0
+    num_pos = pos_mask.long().sum(dim=1, keepdim=True)
+    num_neg = num_pos * neg_pos_ratio
+
+    loss[pos_mask] = - math.inf
+    _, indexes = loss.sort(dim=1, descending=True)
+    _, orders = indexes.sort(dim=1)
+    neg_mask = orders < num_neg
+    return pos_mask | neg_mask

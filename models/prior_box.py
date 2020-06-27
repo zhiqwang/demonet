@@ -2,10 +2,15 @@ import math
 
 import torch
 from torch import nn, Tensor
-from torch.jit.annotations import List
+from torch.jit.annotations import List, Optional, Dict
 
 
 class AnchorGenerator(nn.Module):
+    __annotations__ = {
+        "cell_anchors": Optional[List[torch.Tensor]],
+        "_cache": Dict[str, List[torch.Tensor]]
+    }
+
     """
     Module that generates priors in XYWHA_REL BoxMode for a set of feature maps and
     image sizes.
@@ -177,8 +182,7 @@ class AnchorGenerator(nn.Module):
         strides = list((s, s) for s in self.steps)
         self.set_cell_anchors(dtype, device)
         anchors_over_all_feature_maps = self.cached_grid_anchors(grid_sizes, strides)
-        # anchors = torch.jit.annotate(List[torch.Tensor], [])
-        anchors_in_image = []
+        anchors_in_image = torch.jit.annotate(List[torch.Tensor], [])
         for anchors_per_feature_map in anchors_over_all_feature_maps:
             anchors_in_image.append(anchors_per_feature_map)
         anchors = torch.cat(anchors_in_image) / self.image_size
