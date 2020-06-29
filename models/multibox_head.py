@@ -19,7 +19,7 @@ class MultiBoxHeads(nn.Module):
         score_thresh=0.5,
         nms_thresh=0.45,
         top_k=100,
-        # prior box
+        # parameter for prior box generator
         image_size=300,
         aspect_ratios=[[2, 3], [2, 3], [2, 3], [2, 3], [2, 3], [2, 3]],
         min_ratio=20,
@@ -36,22 +36,22 @@ class MultiBoxHeads(nn.Module):
         self.nms_thresh = nms_thresh
         self.top_k = top_k
 
-        self.image_size = image_size
-        self.aspect_ratios = aspect_ratios
-        self.min_ratio = min_ratio
-        self.max_ratio = max_ratio
-        self.steps = steps
-        self.clip = clip
-        self.min_sizes = min_sizes
-        self.max_sizes = max_sizes
-
-        self.build_priors = self.prior_generator()
+        self.prior_generator = AnchorGenerator(
+            image_size=image_size,
+            aspect_ratios=aspect_ratios,
+            min_ratio=min_ratio,
+            max_ratio=max_ratio,
+            steps=steps,
+            clip=clip,
+            min_sizes=min_sizes,
+            max_sizes=max_sizes,
+        )
         self.build_matcher = PriorMatcher(variances, iou_threshold)
 
     def forward(self, loc, conf, features, targets):
         loc = loc.view(loc.shape[0], -1, 4)  # loc preds
         conf = conf.view(conf.shape[0], loc.shape[1], -1)  # conf preds
-        priors = self.build_priors(features)
+        priors = self.prior_generator(features)
 
         predictions = None
         losses = {}
@@ -67,21 +67,6 @@ class MultiBoxHeads(nn.Module):
         else:
             predictions = self.postprocess(loc, conf, priors)
         return predictions, losses
-
-    def prior_generator(self):
-
-        priors = AnchorGenerator(
-            image_size=self.image_size,
-            aspect_ratios=self.aspect_ratios,
-            min_ratio=self.min_ratio,
-            max_ratio=self.max_ratio,
-            steps=self.steps,
-            clip=self.clip,
-            min_sizes=self.min_sizes,
-            max_sizes=self.max_sizes,
-        )
-
-        return priors
 
     def postprocess(self, loc_data, conf_data, priors):
         """
