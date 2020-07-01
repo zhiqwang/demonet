@@ -124,7 +124,7 @@ class MultiBoxHeads(nn.Module):
             keep = keep[:self.top_k]
 
             decoded_boxes = decoded_boxes[keep]
-            conf_scores = conf_scores[keep][:, None]
+            conf_scores = conf_scores[keep]
             labels = labels[keep]
 
             prediction = self.parse(labels, conf_scores, decoded_boxes)
