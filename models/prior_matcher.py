@@ -5,6 +5,8 @@ from torchvision.ops.boxes import box_iou
 
 from util.box_ops import xywha_to_xyxy, xyxy_to_xywha
 
+from torch.jit.annotations import List
+
 
 class PriorMatcher(nn.Module):
     """This class computes an assignment between the priors and the targets of the network.
@@ -14,12 +16,11 @@ class PriorMatcher(nn.Module):
         self.variances = variances
         self.iou_threshold = iou_threshold
 
-    @torch.no_grad()
     def forward(self, priors_xywha, targets):
 
         priors_xyxy = xywha_to_xyxy(priors_xywha)
-        gt_locations = list()
-        gt_labels = list()
+        gt_locations = torch.jit.annotate(List[torch.Tensor], [])
+        gt_labels = torch.jit.annotate(List[torch.Tensor], [])
         for target in targets:
             box, label = target['boxes'], target['labels']
             box, label = assign_targets_to_priors(box, label, priors_xyxy, self.iou_threshold)
@@ -69,6 +70,7 @@ def assign_targets_to_priors(gt_boxes, gt_labels, priors, iou_threshold):
 
 
 def encode(boxes, priors, variances):
+    # type: (torch.Tensor, torch.Tensor, List[float]) -> torch.Tensor
     """Encode the variances from the priorbox layers into the ground truth boxes
     we have boxes (based on jaccard overlap) with the prior boxes.
     Args:
@@ -85,6 +87,7 @@ def encode(boxes, priors, variances):
 
 # Adapted from https://github.com/Hakuyume/chainer-ssd
 def decode(locations, priors, variances):
+    # type: (torch.Tensor, torch.Tensor, List[float]) -> torch.Tensor
     """Decode locations from predictions using priors to undo
     the encoding we did for offset regression at train time.
     Args:

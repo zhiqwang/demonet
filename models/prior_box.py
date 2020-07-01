@@ -80,6 +80,7 @@ class AnchorGenerator(nn.Module):
         ratios = []
         scale_ratios = []
         for k, aspect_ratio in enumerate(aspect_ratios):
+            aspect_ratio = [float(i) for i in aspect_ratio]
             ratio = [1.0, 1.0]
             extra = self.max_sizes[k] / self.min_sizes[k]
             scale_ratio = [1.0] * (2 + 2 * len(aspect_ratio))
@@ -179,7 +180,8 @@ class AnchorGenerator(nn.Module):
         # type: (List[Tensor]) -> Tensor
         grid_sizes = list([feature_map.shape[-2:] for feature_map in feature_maps])
         dtype, device = feature_maps[0].dtype, feature_maps[0].device
-        strides = list((s, s) for s in self.steps)
+        strides = [[torch.tensor(s, dtype=torch.int64, device=device),
+                    torch.tensor(s, dtype=torch.int64, device=device)] for s in self.steps]
         self.set_cell_anchors(dtype, device)
         anchors_over_all_feature_maps = self.cached_grid_anchors(grid_sizes, strides)
         anchors_in_image = torch.jit.annotate(List[torch.Tensor], [])
