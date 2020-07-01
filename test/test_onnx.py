@@ -1,13 +1,11 @@
 import io
 
-import torch
+import unittest
 
-from collections import OrderedDict
+import torch
+from torchvision.ops._register_onnx_ops import _onnx_opset_version
 
 import onnxruntime
-
-import unittest
-from torchvision.ops._register_onnx_ops import _onnx_opset_version
 
 from hubconf import ssd_lite_mobilenet_v2
 
@@ -78,18 +76,6 @@ class ONNXExporterTester(unittest.TestCase):
                 else:
                     raise
 
-    def get_features(self, images):
-        s0, s1 = images.shape[-2:]
-        features = [
-            ('0', torch.rand(2, 256, s0 // 4, s1 // 4)),
-            ('1', torch.rand(2, 256, s0 // 8, s1 // 8)),
-            ('2', torch.rand(2, 256, s0 // 16, s1 // 16)),
-            ('3', torch.rand(2, 256, s0 // 32, s1 // 32)),
-            ('4', torch.rand(2, 256, s0 // 64, s1 // 64)),
-        ]
-        features = OrderedDict(features)
-        return features
-
     def get_image_from_url(self, url, size=None):
         import requests
         from PIL import Image
@@ -104,7 +90,7 @@ class ONNXExporterTester(unittest.TestCase):
         image = image.resize(size, Image.BILINEAR)
 
         to_tensor = transforms.ToTensor()
-        return to_tensor(image)
+        return to_tensor(image)[None, :]
 
     def get_test_images(self):
         image_url = "http://farm3.staticflickr.com/2469/3915380994_2e611b1779_z.jpg"
@@ -113,14 +99,19 @@ class ONNXExporterTester(unittest.TestCase):
         image_url2 = "https://pytorch.org/tutorials/_static/img/tv_tutorial/tv_image05.png"
         image2 = self.get_image_from_url(url=image_url2, size=(300, 300))
 
-        images = [image]
-        test_images = [image2]
+        images = image
+        test_images = image2
         return images, test_images
 
     def test_ssd_lite_mobilenet_v2(self):
         images, test_images = self.get_test_images()
-        dummy_image = [torch.ones(3, 100, 100) * 0.3]
-        model = ssd_lite_mobilenet_v2(pretrained=True, num_classes=20, image_size=300)
+        dummy_image = torch.ones(1, 3, 300, 300) * 0.3
+        model = ssd_lite_mobilenet_v2(
+            pretrained=True,
+            num_classes=21,
+            image_size=300,
+            onnx_export=True,
+        )
         model.eval()
         model(images)
         # Test exported model on images of different size, or dummy input
@@ -129,7 +120,7 @@ class ONNXExporterTester(unittest.TestCase):
             [(images,), (test_images,), (dummy_image,)],
             input_names=["images_tensors"],
             output_names=["outputs"],
-            dynamic_axes={"images_tensors": [0, 1, 2, 3], "outputs": [0, 1, 2, 3]},
+            # dynamic_axes={"images_tensors": [0, 1, 2, 3], "outputs": [0, 1, 2, 3]},
             tolerate_small_mismatch=True,
         )
         # Test exported model for an image with no detections on other images
@@ -138,7 +129,7 @@ class ONNXExporterTester(unittest.TestCase):
             [(dummy_image,), (images,)],
             input_names=["images_tensors"],
             output_names=["outputs"],
-            dynamic_axes={"images_tensors": [0, 1, 2, 3], "outputs": [0, 1, 2, 3]},
+            # dynamic_axes={"images_tensors": [0, 1, 2, 3], "outputs": [0, 1, 2, 3]},
             tolerate_small_mismatch=True,
         )
 

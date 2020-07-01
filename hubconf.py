@@ -5,7 +5,7 @@ from models.ssd_mobilenet import SSDLiteWithMobileNetV2, build_backbone, build_e
 dependencies = ["torch", "torchvision"]
 
 
-def _make_mobilenet_v2(num_classes, image_size, score_thresh=0.5):
+def _make_mobilenet_v2(num_classes, image_size, onnx_export=False, score_thresh=0.5):
     backbone = build_backbone(train_backbone=False)
     extras_layers = build_extras(backbone.num_channels)
     anchor_nms_cfg = [6, 6, 6, 6, 6, 6]  # number of boxes per feature map location
@@ -15,6 +15,7 @@ def _make_mobilenet_v2(num_classes, image_size, score_thresh=0.5):
         backbone,
         extras_layers,
         head_layers,
+        onnx_export=onnx_export,
         score_thresh=score_thresh,
         image_size=image_size,
         aspect_ratios=[[2, 3], [2, 3], [2, 3], [2, 3], [2, 3], [2, 3]],
@@ -36,6 +37,7 @@ def ssd_lite_mobilenet_v2(
     pretrained=False,
     num_classes=21,
     image_size=300,
+    onnx_export=False,
     score_thresh=0.5,
     return_postprocessor=False,
 ):
@@ -46,6 +48,7 @@ def ssd_lite_mobilenet_v2(
     model = _make_mobilenet_v2(
         num_classes=num_classes,
         image_size=image_size,
+        onnx_export=onnx_export,
         score_thresh=score_thresh,
     )
     if pretrained:

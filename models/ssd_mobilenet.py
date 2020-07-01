@@ -16,13 +16,15 @@ class SSDLiteWithMobileNetV2(nn.Module):
         extras: extra layers
         head: "multibox head" consists of loc and conf conv layers
     """
-    def __init__(self, backbone, extras, head, **kwargs):
+    def __init__(self, backbone, extras, head, onnx_export=False, **kwargs):
         super().__init__()
 
         self.features = backbone.body.features
         self.extras = nn.ModuleList(extras)
         self.loc_conv = nn.ModuleList(head[0])
         self.conf_conv = nn.ModuleList(head[1])
+
+        self.onnx_export = onnx_export
 
         self.multibox_heads = MultiBoxHeads(**kwargs)
 
@@ -70,6 +72,9 @@ class SSDLiteWithMobileNetV2(nn.Module):
 
         loc = torch.cat([o.view(o.size(0), -1) for o in loc], 1)
         conf = torch.cat([o.view(o.size(0), -1) for o in conf], 1)
+
+        if self.onnx_export:
+            return loc, conf
 
         detections, detector_losses = self.multibox_heads(loc, conf, sources, targets)
 
@@ -155,6 +160,7 @@ def build(args):
         backbone,
         extras_layers,
         head_layers,
+        onnx_export=args.onnx_export,
         score_thresh=args.score_thresh,
         image_size=args.image_size,
         aspect_ratios=[[2, 3], [2, 3], [2, 3], [2, 3], [2, 3], [2, 3]],
