@@ -8,7 +8,7 @@ from models.backbone import BackboneBase
 from modules.peleenet import peleenet_v1
 
 
-class ScriptTester(unittest.TestCase):
+class TorchScriptTester(unittest.TestCase):
 
     def test_mobilenet_script(self):
         backbone_base = torchvision.models.mobilenet_v2(pretrained=is_main_process())
