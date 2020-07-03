@@ -69,7 +69,7 @@ class ONNXExporterTester(unittest.TestCase):
         ort_outs = ort_session.run(None, ort_inputs)
         for i in range(0, len(outputs)):
             try:
-                torch.testing.assert_allclose(outputs[i], ort_outs[i], rtol=1e-03, atol=1e-05)
+                torch.testing.assert_allclose(outputs[i], ort_outs[i], rtol=1e-03, atol=1e-04)
             except AssertionError as error:
                 if tolerate_small_mismatch:
                     self.assertIn("(0.00%)", str(error), str(error))
@@ -107,7 +107,7 @@ class ONNXExporterTester(unittest.TestCase):
         images, test_images = self.get_test_images()
         dummy_image = torch.ones(1, 3, 300, 300) * 0.3
         model = ssd_lite_mobilenet_v2(
-            pretrained=True,
+            pretrained=False,
             num_classes=21,
             image_size=300,
             onnx_export=True,
