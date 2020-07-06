@@ -1,5 +1,9 @@
 # De Monet - All of Object Detection
 
+<p align="left">
+  <a href="https://github.com/vanillapi/demonet"><img alt="GitHub Actions status" src="https://github.com/vanillapi/demonet/workflows/Setup%20Python/badge.svg"></a>
+</p>
+
 PyTorch training code and models reimplentation for object detection as described in [Liu et al. (2015), SSD: Single Shot MultiBox Detector](https://arxiv.org/abs/1512.02325). *Currently work in process, very pleasure for suggestion and cooperation.*
 
 ![Example of SSD Lite with mobilenet v2 backbone](.github/demo.png)
