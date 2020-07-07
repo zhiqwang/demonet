@@ -37,7 +37,7 @@ class SSDLiteWithMobileNetV2(nn.Module):
     @torch.jit.unused
     def eager_outputs(
         self,
-        losses,      # type: Dict[str, Tensor]
+        losses,  # type: Dict[str, Tensor]
         detections,  # type: List[Dict[str, Tensor]]
     ):
         # type: (...) -> Tuple[Dict[str, Tensor], List[Dict[str, Tensor]]]
@@ -48,7 +48,7 @@ class SSDLiteWithMobileNetV2(nn.Module):
 
     def forward(
         self,
-        tensor_list,   # type: NestedTensor
+        tensor_list,  # type: NestedTensor
         targets=None,  # type: Optional[List[Dict[str, Tensor]]]
     ):
         # type: (...) -> Tuple[Dict[str, Tensor], List[Dict[str, Tensor]]]
