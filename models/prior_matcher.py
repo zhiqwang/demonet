@@ -1,11 +1,11 @@
 import torch
-import torch.nn as nn
+from torch import nn, Tensor
 
 from torchvision.ops.boxes import box_iou
 
 from util.box_ops import xywha_to_xyxy, xyxy_to_xywha
 
-from torch.jit.annotations import List
+from torch.jit.annotations import List, Dict, Tuple
 
 
 class PriorMatcher(nn.Module):
@@ -17,10 +17,10 @@ class PriorMatcher(nn.Module):
         self.iou_threshold = iou_threshold
 
     def forward(self, priors_xywha, targets):
-
+        # type: (Tensor, List[Dict[str, Tensor]]) -> Tuple[Tensor, Tensor]
         priors_xyxy = xywha_to_xyxy(priors_xywha)
-        gt_locations = torch.jit.annotate(List[torch.Tensor], [])
-        gt_labels = torch.jit.annotate(List[torch.Tensor], [])
+        gt_locations = torch.jit.annotate(List[Tensor], [])
+        gt_labels = torch.jit.annotate(List[Tensor], [])
         for target in targets:
             box, label = target['boxes'], target['labels']
             box, label = assign_targets_to_priors(box, label, priors_xyxy, self.iou_threshold)
@@ -34,6 +34,7 @@ class PriorMatcher(nn.Module):
 
 
 def assign_targets_to_priors(gt_boxes, gt_labels, priors, iou_threshold):
+    # type: (Tensor, Tensor, Tensor, float) -> Tuple[Tensor, Tensor]
     """Assign ground truth boxes and targets to priors.
     Args:
         gt_boxes (Tensor): [num_targets, 4]: ground truth boxes
@@ -70,7 +71,7 @@ def assign_targets_to_priors(gt_boxes, gt_labels, priors, iou_threshold):
 
 
 def encode(boxes, priors, variances):
-    # type: (torch.Tensor, torch.Tensor, List[float]) -> torch.Tensor
+    # type: (Tensor, Tensor, List[float]) -> Tensor
     """Encode the variances from the priorbox layers into the ground truth boxes
     we have boxes (based on jaccard overlap) with the prior boxes.
     Args:
@@ -87,7 +88,7 @@ def encode(boxes, priors, variances):
 
 # Adapted from https://github.com/Hakuyume/chainer-ssd
 def decode(locations, priors, variances):
-    # type: (torch.Tensor, torch.Tensor, List[float]) -> torch.Tensor
+    # type: (Tensor, Tensor, List[float]) -> Tensor
     """Decode locations from predictions using priors to undo
     the encoding we did for offset regression at train time.
     Args:
@@ -103,7 +104,9 @@ def decode(locations, priors, variances):
     return boxes
 
 
+@torch.jit._script_if_tracing
 def boxes_to_locations(boxes, priors, variances):
+    # type: (Tensor, Tensor, List[float]) -> Tensor
     r"""Convert boxes into regressional location results of SSD
     Args:
         boxes (Tensor): [num_targets, 4] in XYWHA_REL BoxMode
@@ -120,7 +123,9 @@ def boxes_to_locations(boxes, priors, variances):
     ], dim=boxes.dim() - 1)
 
 
+@torch.jit._script_if_tracing
 def locations_to_boxes(locations, priors, variances):
+    # type: (Tensor, Tensor, List[float]) -> Tensor
     r"""Convert regressional location results of SSD into boxes in XYWHA_REL BoxMode
     The conversion:
         $$predicted\_center \times variance_center =

@@ -1,7 +1,7 @@
 import warnings
 
 import torch
-import torch.nn as nn
+from torch import nn, Tensor
 
 from torchvision.models.mobilenet import InvertedResidual, mobilenet_v2
 
@@ -11,7 +11,6 @@ from .backbone import BackboneBase
 from .multibox_head import MultiBoxHeads
 
 from torch.jit.annotations import Tuple, List, Dict, Optional
-from torch import Tensor
 
 
 class SSDLiteWithMobileNetV2(nn.Module):
@@ -36,18 +35,27 @@ class SSDLiteWithMobileNetV2(nn.Module):
         self._has_warned = False
 
     @torch.jit.unused
-    def eager_outputs(self, losses, detections):
+    def eager_outputs(
+        self,
+        losses,      # type: Dict[str, Tensor]
+        detections,  # type: List[Dict[str, Tensor]]
+    ):
+        # type: (...) -> Tuple[Dict[str, Tensor], List[Dict[str, Tensor]]]
         if self.training:
             return losses
 
         return detections
 
-    def forward(self, tensor_list, targets=None):
-        # type: (NestedTensor, Optional[List[Dict[str, Tensor]]]) -> Tuple[Dict[str, Tensor], List[Dict[str, Tensor]]]
+    def forward(
+        self,
+        tensor_list,   # type: NestedTensor
+        targets=None,  # type: Optional[List[Dict[str, Tensor]]]
+    ):
+        # type: (...) -> Tuple[Dict[str, Tensor], List[Dict[str, Tensor]]]
         """
         Arguments:
             tensor_list (NestedTensor): samples to be processed
-            targets (Tensor): ground-truth boxes present in the image (optional)
+            targets (List[Dict[Tensor]]): ground-truth boxes present in the image (optional)
         Returns:
             result (list[BoxList] or dict[Tensor]): the output from the model.
                 During training, it returns a dict[Tensor] which contains the losses.
@@ -92,7 +100,7 @@ class SSDLiteWithMobileNetV2(nn.Module):
         return self.eager_outputs(detector_losses, detections)
         if torch.jit.is_scripting():
             if not self._has_warned:
-                warnings.warn("RCNN always returns a (Losses, Detections) tuple in scripting")
+                warnings.warn("DEMONET always returns a (Losses, Detections) tuple in scripting")
                 self._has_warned = True
             return (detector_losses, detections)
         else:

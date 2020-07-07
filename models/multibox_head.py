@@ -1,12 +1,14 @@
 import math
 
 import torch
-import torch.nn as nn
+from torch import nn, Tensor
 import torch.nn.functional as F
 import torchvision
 
 from .prior_box import AnchorGenerator
 from .prior_matcher import PriorMatcher, decode
+
+from torch.jit.annotations import List, Dict, Tuple
 
 
 class MultiBoxHeads(nn.Module):
@@ -48,7 +50,14 @@ class MultiBoxHeads(nn.Module):
         )
         self.build_matcher = PriorMatcher(variances, iou_threshold)
 
-    def forward(self, loc, conf, features, targets):
+    def forward(
+        self,
+        loc,       # type: Tensor
+        conf,      # type: Tensor
+        features,  # type: List[Tensor]
+        targets,   # type: List[Dict[str, Tensor]]
+    ):
+        # type: (...) -> Tuple[List[Dict[str, Tensor]], Dict[str, Tensor]]
         loc = loc.view(loc.shape[0], -1, 4)  # loc preds
         conf = conf.view(conf.shape[0], loc.shape[1], -1)  # conf preds
         priors = self.prior_generator(features)
@@ -81,7 +90,7 @@ class MultiBoxHeads(nn.Module):
             priors (tensor): [num_priors, 4] real boxes corresponding all the priors.
         """
         conf_data = F.softmax(conf_data, dim=2)
-        predictions = []
+        predictions = torch.jit.annotate(List[Dict[str, Tensor]], [])
         batch_size = loc_data.shape[0]
         num_priors = priors.shape[0]
         # conf_preds: batch_size x num_priors x num_classes
