@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader, DistributedSampler
 
 import util.misc as utils
 
-from datasets import build_dataset, collate_fn, get_coco_api_from_dataset
+from datasets import build_dataset, get_coco_api_from_dataset
 from models import build_model
 from engine import train_one_epoch, evaluate
 
@@ -116,7 +116,7 @@ def main(args):
     data_loader_train = DataLoader(
         dataset_train,
         batch_sampler=batch_sampler_train,
-        collate_fn=collate_fn,
+        collate_fn=utils.collate_fn,
         num_workers=args.num_workers,
     )
     data_loader_val = DataLoader(
@@ -124,7 +124,7 @@ def main(args):
         args.batch_size,
         sampler=sampler_val,
         drop_last=False,
-        collate_fn=collate_fn,
+        collate_fn=utils.collate_fn,
         num_workers=args.num_workers,
     )
 

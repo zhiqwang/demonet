@@ -6,7 +6,12 @@ Backbone modules.
 import torch
 
 from torch import nn
+import torch.nn.functional as F
+from torchvision.models import mobilenet_v2
 from torchvision.models._utils import IntermediateLayerGetter
+from typing import Dict
+
+from util.misc import NestedTensor, is_main_process
 
 
 class FrozenBatchNorm2d(nn.Module):
@@ -63,6 +68,24 @@ class BackboneBase(nn.Module):
         self.body = IntermediateLayerGetter(backbone, return_layers=return_layers)
         self.num_channels = num_channels
 
-    def forward(self, x):
-        out = self.body(x)
+    def forward(self, tensor_list: NestedTensor):
+        xs = self.body(tensor_list.tensors)
+        out: Dict[str, NestedTensor] = {}
+        for name, x in xs.items():
+            m = tensor_list.mask
+            assert m is not None
+            mask = F.interpolate(m[None].float(), size=x.shape[-2:]).to(torch.bool)[0]
+            out[name] = NestedTensor(x, mask)
         return out
+
+
+class BackboneWithMobileNet(BackboneBase):
+    """MobileNet backbone with frozen BatchNorm."""
+    def __init__(
+        self,
+        train_backbone: bool,
+    ):
+        backbone = mobilenet_v2(pretrained=is_main_process(), norm_layer=FrozenBatchNorm2d)
+        return_layers = {"features": "0"}
+        num_channels = 1280
+        super().__init__(backbone, return_layers, train_backbone, num_channels)

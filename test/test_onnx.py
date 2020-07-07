@@ -7,6 +7,7 @@ from torchvision.ops._register_onnx_ops import _onnx_opset_version
 
 import onnxruntime
 
+from util.misc import NestedTensor, nested_tensor_from_tensor_list
 from hubconf import ssd_lite_mobilenet_v2
 
 
@@ -42,11 +43,11 @@ class ONNXExporterTester(unittest.TestCase):
         # validate the exported model with onnx runtime
         for test_inputs in inputs_list:
             with torch.no_grad():
-                if isinstance(test_inputs, torch.Tensor) or isinstance(test_inputs, list):
-                    test_inputs = (test_inputs,)
+                if isinstance(test_inputs, NestedTensor):
+                    test_inputs = (test_inputs.tensors,)
                 test_ouputs = model(*test_inputs)
-                if isinstance(test_ouputs, torch.Tensor):
-                    test_ouputs = (test_ouputs,)
+                if isinstance(test_ouputs, NestedTensor):
+                    test_ouputs = (test_ouputs.tesnors,)
             self.ort_validate(onnx_io, test_inputs, test_ouputs, tolerate_small_mismatch)
 
     def ort_validate(self, onnx_io, inputs, outputs, tolerate_small_mismatch=False):
@@ -90,7 +91,7 @@ class ONNXExporterTester(unittest.TestCase):
         image = image.resize(size, Image.BILINEAR)
 
         to_tensor = transforms.ToTensor()
-        return to_tensor(image)[None, :]
+        return to_tensor(image)
 
     def get_test_images(self):
         image_url = "http://farm3.staticflickr.com/2469/3915380994_2e611b1779_z.jpg"
@@ -99,13 +100,13 @@ class ONNXExporterTester(unittest.TestCase):
         image_url2 = "https://pytorch.org/tutorials/_static/img/tv_tutorial/tv_image05.png"
         image2 = self.get_image_from_url(url=image_url2, size=(300, 300))
 
-        images = image
-        test_images = image2
+        images = nested_tensor_from_tensor_list([image])
+        test_images = nested_tensor_from_tensor_list([image2])
         return images, test_images
 
     def test_ssd_lite_mobilenet_v2(self):
         images, test_images = self.get_test_images()
-        dummy_image = torch.ones(1, 3, 300, 300) * 0.3
+        x = nested_tensor_from_tensor_list([torch.rand(3, 300, 300), torch.rand(3, 300, 300)])
         model = ssd_lite_mobilenet_v2(
             pretrained=False,
             num_classes=21,
@@ -117,7 +118,7 @@ class ONNXExporterTester(unittest.TestCase):
         # Test exported model on images of different size, or dummy input
         self.run_model(
             model,
-            [(images,), (test_images,), (dummy_image,)],
+            [(images,), (test_images,), (x,)],
             input_names=["images_tensors"],
             output_names=["outputs"],
             # dynamic_axes={"images_tensors": [0, 1, 2, 3], "outputs": [0, 1, 2, 3]},
@@ -126,7 +127,7 @@ class ONNXExporterTester(unittest.TestCase):
         # Test exported model for an image with no detections on other images
         self.run_model(
             model,
-            [(dummy_image,), (images,)],
+            [(x,), (images,)],
             input_names=["images_tensors"],
             output_names=["outputs"],
             # dynamic_axes={"images_tensors": [0, 1, 2, 3], "outputs": [0, 1, 2, 3]},

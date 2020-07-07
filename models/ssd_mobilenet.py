@@ -1,12 +1,17 @@
+import warnings
+
 import torch
 import torch.nn as nn
 
 from torchvision.models.mobilenet import InvertedResidual, mobilenet_v2
 
-from util.misc import is_main_process
+from util.misc import NestedTensor, is_main_process
 
 from .backbone import BackboneBase
 from .multibox_head import MultiBoxHeads
+
+from torch.jit.annotations import Tuple, List, Dict, Optional
+from torch import Tensor
 
 
 class SSDLiteWithMobileNetV2(nn.Module):
@@ -27,17 +32,21 @@ class SSDLiteWithMobileNetV2(nn.Module):
         self.onnx_export = onnx_export
 
         self.multibox_heads = MultiBoxHeads(**kwargs)
+        # used only on torchscript mode
+        self._has_warned = False
 
+    @torch.jit.unused
     def eager_outputs(self, losses, detections):
         if self.training:
             return losses
 
         return detections
 
-    def forward(self, samples, targets=None):
+    def forward(self, tensor_list, targets=None):
+        # type: (NestedTensor, Optional[List[Dict[str, Tensor]]]) -> Tuple[Dict[str, Tensor], List[Dict[str, Tensor]]]
         """
         Arguments:
-            samples (Tensor): samples to be processed
+            tensor_list (NestedTensor): samples to be processed
             targets (Tensor): ground-truth boxes present in the image (optional)
         Returns:
             result (list[BoxList] or dict[Tensor]): the output from the model.
@@ -45,6 +54,8 @@ class SSDLiteWithMobileNetV2(nn.Module):
                 During testing, it returns list[BoxList] contains additional fields
                 like `scores`, `labels` and `mask` (for Mask R-CNN models).
         """
+        samples = tensor_list.tensors
+
         sources = list()
         loc = list()
         conf = list()
@@ -79,6 +90,13 @@ class SSDLiteWithMobileNetV2(nn.Module):
         detections, detector_losses = self.multibox_heads(loc, conf, sources, targets)
 
         return self.eager_outputs(detector_losses, detections)
+        if torch.jit.is_scripting():
+            if not self._has_warned:
+                warnings.warn("RCNN always returns a (Losses, Detections) tuple in scripting")
+                self._has_warned = True
+            return (detector_losses, detections)
+        else:
+            return self.eager_outputs(detector_losses, detections)
 
 
 def build_backbone(train_backbone=True):

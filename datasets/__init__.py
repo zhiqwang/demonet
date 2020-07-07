@@ -16,12 +16,6 @@ def get_coco_api_from_dataset(dataset):
         return dataset.coco
 
 
-def collate_fn(batch):
-    batch = list(zip(*batch))
-    batch[0] = torch.stack(batch[0], 0)
-    return tuple(batch)
-
-
 def build_dataset(image_set, dataset_year, args):
 
     datasets = []
