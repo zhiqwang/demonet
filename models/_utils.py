@@ -1,17 +1,56 @@
+import math
+
 import torch
 from torch import Tensor
 
-from torch.jit.annotations import List, Tuple
+from torch.jit.annotations import Tuple
+
+
+class BalancedPositiveNegativeSampler(object):
+    """
+    This class samples batches, ensuring that they contain a fixed proportion of positives
+    """
+
+    def __init__(self, negative_positive_ratio):
+        # type: (int) -> None
+        """
+        Arguments:
+            negative_positive_ratio (int): the ratio between the negative examples and
+                positive examples.
+        """
+        self.negative_positive_ratio = negative_positive_ratio
+
+    def __call__(self, loss, targets):
+        """
+        It used to suppress the presence of a large number of negative prediction.
+        It works on image level not batch level.
+        For any example/image, it keeps all the positive predictions and
+            cut the number of negative predictions to make sure the ratio
+            between the negative examples and positive examples is no more
+            the given ratio for an image.
+        Args:
+            loss (batch_size, num_priors): the loss for each example.
+            targets (batch_size, num_priors): the targets.
+        """
+        pos_mask = targets > 0
+        num_pos = pos_mask.long().sum(dim=1, keepdim=True)
+        num_neg = num_pos * self.negative_positive_ratio
+
+        loss[pos_mask] = - math.inf
+        _, indexes = loss.sort(dim=1, descending=True)
+        _, orders = indexes.sort(dim=1)
+        neg_mask = orders < num_neg
+        return pos_mask | neg_mask
 
 
 @torch.jit._script_if_tracing
 def boxes_to_locations(boxes, priors, variances):
-    # type: (Tensor, Tensor, List[float]) -> Tensor
+    # type: (Tensor, Tensor, Tuple[float]) -> Tensor
     r"""Convert boxes into regressional location results of SSD
     Args:
         boxes (Tensor): [num_targets, 4] in XYWHA_REL BoxMode
         priors (Tensor): [num_targets] in XYWHA_REL BoxMode
-        variances (list(float)): used to change the scale of center.
+        variances (Tuple[float]): used to change the scale of center.
             change of scale of size.
     """
     # priors can have one dimension less
@@ -25,7 +64,7 @@ def boxes_to_locations(boxes, priors, variances):
 
 @torch.jit._script_if_tracing
 def locations_to_boxes(locations, priors, variances):
-    # type: (Tensor, Tensor, List[float]) -> Tensor
+    # type: (Tensor, Tensor, Tuple[float, float]) -> Tensor
     r"""Convert regressional location results of SSD into boxes in XYWHA_REL BoxMode
     The conversion:
         $$predicted\_center \times variance_center =
@@ -36,7 +75,7 @@ def locations_to_boxes(locations, priors, variances):
         locations (Tensor): [batch_size, num_priors, 4] the regression output of SSD.
             It will contain the outputs as well.
         priors (Tensor): [num_priors, 4] or [batch_size, num_priors, 4] prior boxes.
-        variances (list(float)): used to change the scale of center and
+        variances (Tuple[float]): used to change the scale of center and
             change of scale of size.
     Returns:
         boxes: priors (Tensor): converted XYWHA_REL BoxMode. All the values
