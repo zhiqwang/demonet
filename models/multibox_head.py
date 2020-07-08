@@ -7,7 +7,7 @@ from torchvision.ops.boxes import box_iou, batched_nms
 from . import _utils as det_utils
 from .prior_box import AnchorGenerator
 
-from torch.jit.annotations import Tuple, List, Dict
+from torch.jit.annotations import List, Optional, Dict, Tuple
 
 
 class MultiBoxHeads(nn.Module):
@@ -68,7 +68,7 @@ class MultiBoxHeads(nn.Module):
         loc,  # type: Tensor
         conf,  # type: Tensor
         features,  # type: List[Tensor]
-        targets,  # type: List[Dict[str, Tensor]]
+        targets=None,  # type: Optional[List[Dict[str, Tensor]]]
     ):
         # type: (...) -> Tuple[List[Dict[str, Tensor]], Dict[str, Tensor]]
         loc = loc.view(loc.shape[0], -1, 4)  # loc preds

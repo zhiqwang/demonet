@@ -10,7 +10,7 @@ from util.misc import NestedTensor, is_main_process
 from .backbone import BackboneBase
 from .multibox_head import MultiBoxHeads
 
-from torch.jit.annotations import Tuple, List, Dict, Optional
+from torch.jit.annotations import List, Optional, Dict, Tuple
 
 
 class SSDLiteWithMobileNetV2(nn.Module):
@@ -95,7 +95,7 @@ class SSDLiteWithMobileNetV2(nn.Module):
         if self.onnx_export:
             return loc, conf
 
-        detections, detector_losses = self.multibox_heads(loc, conf, sources, targets)
+        detections, detector_losses = self.multibox_heads(loc, conf, sources, targets=targets)
 
         return self.eager_outputs(detector_losses, detections)
         if torch.jit.is_scripting():
