@@ -18,6 +18,7 @@ class MultiBoxHeads(nn.Module):
     __annotations__ = {
         'box_coder': det_utils.BoxCoder,
         'hard_negative_mining': det_utils.BalancedPositiveNegativeSampler,
+        'post_nms_top_n': int,
     }
 
     def __init__(
@@ -28,7 +29,7 @@ class MultiBoxHeads(nn.Module):
         negative_positive_ratio=3,
         score_thresh=0.5,
         nms_thresh=0.45,
-        top_k=100,
+        post_nms_top_n=100,
         # parameter for prior box generator
         image_size=300,
         aspect_ratios=[[2, 3], [2, 3], [2, 3], [2, 3], [2, 3], [2, 3]],
@@ -61,18 +62,18 @@ class MultiBoxHeads(nn.Module):
         # used during testing
         self.score_thresh = score_thresh
         self.nms_thresh = nms_thresh
-        self.top_k = top_k
+        self.post_nms_top_n = post_nms_top_n
 
     def forward(
         self,
-        loc,  # type: Tensor
-        conf,  # type: Tensor
+        pred_bbox_deltas,  # type: Tensor
+        objectness,  # type: Tensor
         features,  # type: List[Tensor]
         targets=None,  # type: Optional[List[Dict[str, Tensor]]]
     ):
         # type: (...) -> Tuple[List[Dict[str, Tensor]], Dict[str, Tensor]]
-        loc = loc.view(loc.shape[0], -1, 4)  # loc preds
-        conf = conf.view(conf.shape[0], loc.shape[1], -1)  # conf preds
+        pred_bbox_deltas = pred_bbox_deltas.reshape(pred_bbox_deltas.shape[0], -1, 4)
+        objectness = objectness.reshape(objectness.shape[0], pred_bbox_deltas.shape[1], -1)
 
         priors = self.prior_generator(features)  # BoxMode: XYWHA_REL
         priors_xyxy = det_utils.xywha_to_xyxy(priors)
@@ -89,19 +90,21 @@ class MultiBoxHeads(nn.Module):
                 gt_locations.append(locations)
                 gt_labels.append(label)
 
-            gt_locations = torch.stack(gt_locations, 0)
-            gt_labels = torch.stack(gt_labels, 0)
-            loss_objectness, loss_box_reg = self.compute_loss(loc, conf, gt_locations, gt_labels)
+            gt_locations_batch = torch.stack(gt_locations, 0)
+            gt_labels_batch = torch.stack(gt_labels, 0)
+            loss_objectness, loss_box_reg = self.compute_loss(
+                pred_bbox_deltas, objectness, gt_locations_batch, gt_labels_batch)
+
             losses = {
-                'loc': loss_box_reg,
-                'conf': loss_objectness,
+                'pred_bbox_deltas': loss_box_reg,
+                'objectness': loss_objectness,
             }
         else:
-            predictions = self.filter_proposals(loc, conf, priors)
+            predictions = self.filter_priors(priors, pred_bbox_deltas, objectness)
         return predictions, losses
 
     def assign_targets_to_priors(self, gt_boxes, gt_labels, priors):
-        # type: (Tensor, Tensor, Tensor, float) -> Tuple[Tensor, Tensor]
+        # type: (Tensor, Tensor, Tensor) -> Tuple[Tensor, Tensor]
         """Assign ground truth boxes and targets to priors.
         Args:
             gt_boxes (Tensor): [num_targets, 4]: ground truth boxes
@@ -135,70 +138,71 @@ class MultiBoxHeads(nn.Module):
         boxes = gt_boxes[matches]
         return boxes, labels
 
-    def filter_proposals(self, loc_data, conf_data, priors):
+    def filter_priors(self, priors, pred_bbox_deltas, objectness):
+        # type: (Tensor, Tensor, Tensor) -> List[Dict[str, Tensor]]
         """
         At test time, Detect is the final layer of SSD. Decode location preds,
         apply non-maximum suppression to location predictions based on conf
-        scores and threshold to a top_k number of output predictions for both
-        confidence score and locations.
+        scores and threshold to a post_nms_top_n number of output predictions
+        for both confidence score and locations.
 
         Args:
-            loc_data (tensor): [batch_size, num_priors x 4] predicted locations.
-            conf_data (tensor): [batch_size, num_priors, num_classes] class predictions.
+            pred_bbox_deltas (tensor): [batch_size, num_priors x 4] predicted locations.
+            objectness (tensor): [batch_size, num_priors, num_classes] class predictions.
             priors (tensor): [num_priors, 4] real boxes corresponding all the priors.
         """
-        conf_data = F.softmax(conf_data, dim=2)
+        objectness = F.softmax(objectness, dim=2)
         predictions = torch.jit.annotate(List[Dict[str, Tensor]], [])
-        batch_size = loc_data.shape[0]
+        num_images = pred_bbox_deltas.shape[0]
+        # device = pred_bbox_deltas.device
         num_priors = priors.shape[0]
-        # conf_preds: batch_size x num_priors x num_classes
-        conf_preds = conf_data.view(batch_size, num_priors, -1)
+        # objectness: batch_size x num_priors x num_classes
+        objectness = objectness.view(num_images, num_priors, -1)
 
         # Decode predictions into bboxes.
-        for i in range(batch_size):
-            decoded_boxes = self.box_coder.decode(loc_data[i], priors)  # num_priors x 4
+        for i in range(num_images):
+            decoded_boxes = self.box_coder.decode(pred_bbox_deltas[i], priors)  # num_priors x 4
             # For each class, perform nms
-            conf_scores = conf_preds[i].clone()  # num_priors x num_classes
-
-            num_priors, num_classes = conf_scores.shape
+            scores = objectness[i].clone()  # num_priors x num_classes
+            num_priors, num_classes = scores.shape
 
             decoded_boxes = decoded_boxes.view(num_priors, 1, 4)
             decoded_boxes = decoded_boxes.expand(num_priors, num_classes, 4)
             labels = torch.arange(num_classes, device=decoded_boxes.device)
-            labels = labels.view(1, num_classes).expand_as(conf_scores)
+            labels = labels.view(1, num_classes).expand_as(scores)
 
             # remove predictions with the background label
             decoded_boxes = decoded_boxes[:, 1:]
-            conf_scores = conf_scores[:, 1:]
+            scores = scores[:, 1:]
             labels = labels[:, 1:]
 
             # batch everything, by making every class prediction be a separate instance
             decoded_boxes = decoded_boxes.reshape(-1, 4)
-            conf_scores = conf_scores.reshape(-1)
+            scores = scores.reshape(-1)
             labels = labels.reshape(-1)
 
             # remove low scoring decoded_boxes
-            indices = torch.nonzero(conf_scores > self.score_thresh, as_tuple=False).squeeze(1)
+            indices = torch.nonzero(scores > self.score_thresh, as_tuple=False).squeeze(1)
             decoded_boxes = decoded_boxes[indices]
-            conf_scores = conf_scores[indices]
+            scores = scores[indices]
             labels = labels[indices]
-
-            keep = batched_nms(decoded_boxes, conf_scores, labels, self.nms_thresh)
+            # non-maximum suppression, independently done per level
+            keep = batched_nms(decoded_boxes, scores, labels, self.nms_thresh)
 
             # keep only topk scoring predictions
-            keep = keep[:self.top_k]
+            keep = keep[:self.post_nms_top_n]
 
             decoded_boxes = decoded_boxes[keep]
-            conf_scores = conf_scores[keep]
+            scores = scores[keep]
             labels = labels[keep]
 
-            prediction = self.parse(labels, conf_scores, decoded_boxes)
+            prediction = self.parse(labels, scores, decoded_boxes)
             predictions.append(prediction)
 
         return predictions
 
     def parse(self, det_label, det_conf, det_boxes):
-        # Parse the outputs
+        # type: (Tensor, Tensor, Tensor) -> Dict[str, Tensor]
         prediction = {}
 
         # Get detections with confidence higher than threshold.

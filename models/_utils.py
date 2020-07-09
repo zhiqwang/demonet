@@ -45,7 +45,7 @@ class BalancedPositiveNegativeSampler(object):
 
 @torch.jit._script_if_tracing
 def boxes_to_locations(boxes, priors, variances):
-    # type: (Tensor, Tensor, Tuple[float]) -> Tensor
+    # type: (Tensor, Tensor, Tuple[float, float]) -> Tensor
     r"""Convert boxes into regressional location results of SSD
     Args:
         boxes (Tensor): [num_targets, 4] in XYWHA_REL BoxMode

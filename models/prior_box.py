@@ -2,7 +2,7 @@ import math
 
 import torch
 from torch import nn, Tensor
-from torch.jit.annotations import List, Optional, Dict
+from torch.jit.annotations import List, Optional, Dict, Tuple
 
 
 class AnchorGenerator(nn.Module):
@@ -77,6 +77,7 @@ class AnchorGenerator(nn.Module):
         return min_sizes, max_sizes
 
     def compute_ratios(self, aspect_ratios):
+        # type: (List(float)) -> Tuple(List(float), List(float))
         ratios = []
         scale_ratios = []
         for k, aspect_ratio in enumerate(aspect_ratios):

@@ -18,15 +18,15 @@ class SSDLiteWithMobileNetV2(nn.Module):
     Args:
         backbone: MobileNet V2 backbone layers
         extras: extra layers
-        head: "multibox head" consists of loc and conf conv layers
+        head: "multibox head" consists of box_regression and class_logits conv layers
     """
     def __init__(self, backbone, extras, head, onnx_export=False, **kwargs):
         super().__init__()
 
-        self.features = backbone.body.features
+        self.backbone = backbone.body.features
         self.extras = nn.ModuleList(extras)
-        self.loc_conv = nn.ModuleList(head[0])
-        self.conf_conv = nn.ModuleList(head[1])
+        self.bbox_pred = nn.ModuleList(head[0])
+        self.cls_logits = nn.ModuleList(head[1])
 
         self.onnx_export = onnx_export
 
@@ -64,38 +64,39 @@ class SSDLiteWithMobileNetV2(nn.Module):
         """
         samples = tensor_list.tensors
 
-        sources = list()
-        loc = list()
-        conf = list()
+        features = list()
+        box_regression = list()
+        class_logits = list()
 
-        for k, feature in enumerate(self.features):
+        for k, feature in enumerate(self.backbone):
             if k == 14:
                 assert isinstance(feature, InvertedResidual)
                 for j, sub_feature in enumerate(feature.conv):
                     samples = sub_feature(samples)
                     if j == 0:
-                        sources.append(samples)
+                        features.append(samples)
             else:
                 samples = feature(samples)
 
-        sources.append(samples)
+        features.append(samples)
 
         # apply extra layers and cache source layer outputs
         for k, v in enumerate(self.extras):
             samples = v(samples)
-            sources.append(samples)
+            features.append(samples)
 
-        for (x, l, c) in zip(sources, self.loc_conv, self.conf_conv):
-            loc.append(l(x).permute(0, 2, 3, 1).contiguous())
-            conf.append(c(x).permute(0, 2, 3, 1).contiguous())
+        for (x, b, c) in zip(features, self.bbox_pred, self.cls_logits):
+            box_regression.append(b(x).permute(0, 2, 3, 1).contiguous())
+            class_logits.append(c(x).permute(0, 2, 3, 1).contiguous())
 
-        loc = torch.cat([o.view(o.size(0), -1) for o in loc], 1)
-        conf = torch.cat([o.view(o.size(0), -1) for o in conf], 1)
+        box_regression = torch.cat([o.view(o.size(0), -1) for o in box_regression], 1)
+        class_logits = torch.cat([o.view(o.size(0), -1) for o in class_logits], 1)
 
         if self.onnx_export:
-            return loc, conf
+            return box_regression, class_logits
 
-        detections, detector_losses = self.multibox_heads(loc, conf, sources, targets=targets)
+        detections, detector_losses = self.multibox_heads(
+            box_regression, class_logits, features, targets=targets)
 
         return self.eager_outputs(detector_losses, detections)
         if torch.jit.is_scripting():
@@ -150,20 +151,20 @@ class SeperableConv2d(nn.Sequential):
 
 
 def build_multibox(cfg, num_classes, width_mult=1.0):
-    loc_layers = list()
-    conf_layers = list()
+    bbox_reg = list()
+    logits = list()
 
     in_channels = round(576 * width_mult)
     channels = [in_channels, 1280, 512, 256, 256, 64]
 
     for i in range(5):
-        loc_layers.append(SeperableConv2d(channels[i], cfg[i] * 4, 3, padding=1))
-        conf_layers.append(SeperableConv2d(channels[i], cfg[i] * num_classes, 3, padding=1))
+        bbox_reg.append(SeperableConv2d(channels[i], cfg[i] * 4, 3, padding=1))
+        logits.append(SeperableConv2d(channels[i], cfg[i] * num_classes, 3, padding=1))
 
-    loc_layers.append(nn.Conv2d(channels[-1], cfg[-1] * 4, 1))
-    conf_layers.append(nn.Conv2d(channels[-1], cfg[-1] * num_classes, 1))
+    bbox_reg.append(nn.Conv2d(channels[-1], cfg[-1] * 4, 1))
+    logits.append(nn.Conv2d(channels[-1], cfg[-1] * num_classes, 1))
 
-    return (loc_layers, conf_layers)
+    return bbox_reg, logits
 
 
 model_urls = {'ssd_lite_mobilenet_v2': ''}
@@ -180,12 +181,12 @@ def build(args):
     extras_layers = build_extras(backbone.num_channels)
 
     anchor_nms_cfg = [6, 6, 6, 6, 6, 6]  # number of boxes per feature map location
-    head_layers = build_multibox(anchor_nms_cfg, args.num_classes)
+    multibox_head = build_multibox(anchor_nms_cfg, args.num_classes)
 
     model = SSDLiteWithMobileNetV2(
         backbone,
         extras_layers,
-        head_layers,
+        multibox_head,
         onnx_export=args.onnx_export,
         score_thresh=args.score_thresh,
         image_size=args.image_size,
