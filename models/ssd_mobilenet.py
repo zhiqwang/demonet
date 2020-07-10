@@ -89,12 +89,6 @@ class SSDLiteWithMobileNetV2(nn.Module):
             box_regression.append(b(x).permute(0, 2, 3, 1).contiguous())
             class_logits.append(c(x).permute(0, 2, 3, 1).contiguous())
 
-        box_regression = torch.cat([o.view(o.size(0), -1) for o in box_regression], 1)
-        class_logits = torch.cat([o.view(o.size(0), -1) for o in class_logits], 1)
-
-        if self.onnx_export:
-            return box_regression, class_logits
-
         detections, detector_losses = self.multibox_heads(
             box_regression, class_logits, features, targets=targets)
 

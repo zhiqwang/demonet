@@ -2,12 +2,62 @@ import torch
 from torch import nn, Tensor
 import torch.nn.functional as F
 
+import torchvision
 from torchvision.ops.boxes import box_iou, batched_nms
 
 from . import _utils as det_utils
 from .prior_box import AnchorGenerator
 
 from torch.jit.annotations import List, Optional, Dict, Tuple
+
+
+@torch.jit.unused
+def _onnx_get_num_priors(ob):
+    # type: (Tensor, int) -> int
+    from torch.onnx import operators
+    num_anchors = operators.shape_as_tensor(ob)[0].unsqueeze(0)
+
+    return num_anchors
+
+
+def permute_and_flatten(layer, N, A, C, H, W):
+    # type: (Tensor, int, int, int, int, int) -> Tensor
+    layer = layer.view(N, H, W, -1, C)
+    layer = layer.reshape(N, -1, C)
+    return layer
+
+
+def concat_box_prediction_layers(box_cls, box_regression):
+    # type: (List[Tensor], List[Tensor]) -> Tuple[Tensor, Tensor]
+    box_cls_flattened = []
+    box_regression_flattened = []
+    # for each feature level, permute the outputs to make them be in the
+    # same format as the labels. Note that the labels are computed for
+    # all feature levels concatenated, so we keep the same representation
+    # for the objectness and the box_regression
+    for box_cls_per_level, box_regression_per_level in zip(
+        box_cls, box_regression
+    ):
+        N, H, W, AxC = box_cls_per_level.shape
+        Ax4 = box_regression_per_level.shape[-1]
+        A = Ax4 // 4
+        C = AxC // A
+        box_cls_per_level = permute_and_flatten(
+            box_cls_per_level, N, A, C, H, W
+        )
+        box_cls_flattened.append(box_cls_per_level)
+
+        box_regression_per_level = permute_and_flatten(
+            box_regression_per_level, N, A, 4, H, W
+        )
+        box_regression_flattened.append(box_regression_per_level)
+    # concatenate on the first dimension (representing the feature levels), to
+    # take into account the way the labels were generated (with all feature maps
+    # being concatenated as well)
+
+    box_cls = torch.cat(box_cls_flattened, dim=1)
+    box_regression = torch.cat(box_regression_flattened, dim=1)
+    return box_cls, box_regression
 
 
 class MultiBoxHeads(nn.Module):
@@ -66,17 +116,15 @@ class MultiBoxHeads(nn.Module):
 
     def forward(
         self,
-        pred_bbox_deltas,  # type: Tensor
-        objectness,  # type: Tensor
+        pred_bbox_deltas,  # type: List[Tensor]
+        objectness,  # type: List[Tensor]
         features,  # type: List[Tensor]
         targets=None,  # type: Optional[List[Dict[str, Tensor]]]
     ):
         # type: (...) -> Tuple[List[Dict[str, Tensor]], Dict[str, Tensor]]
-        pred_bbox_deltas = pred_bbox_deltas.reshape(pred_bbox_deltas.shape[0], -1, 4)
-        objectness = objectness.reshape(objectness.shape[0], pred_bbox_deltas.shape[1], -1)
-
+        objectness, pred_bbox_deltas = concat_box_prediction_layers(objectness, pred_bbox_deltas)
         priors = self.prior_generator(features)  # BoxMode: XYWHA_REL
-        priors_xyxy = det_utils.xywha_to_xyxy(priors)
+
         gt_locations = torch.jit.annotate(List[Tensor], [])
         gt_labels = torch.jit.annotate(List[Tensor], [])
         predictions = torch.jit.annotate(List[Dict[str, Tensor]], [])
@@ -84,6 +132,7 @@ class MultiBoxHeads(nn.Module):
         if self.training:
             assert targets is not None
             for target in targets:
+                priors_xyxy = det_utils.xywha_to_xyxy(priors)
                 box, label = target['boxes'], target['labels']
                 box, label = self.assign_targets_to_priors(box, label, priors_xyxy)
                 locations = self.box_coder.encode(box, priors)
@@ -100,7 +149,8 @@ class MultiBoxHeads(nn.Module):
                 'objectness': loss_objectness,
             }
         else:
-            predictions = self.filter_priors(priors, pred_bbox_deltas, objectness)
+            boxes, scores, labels = self.filter_priors(priors, pred_bbox_deltas, objectness)
+            predictions = self.parse_predictions(boxes, scores, labels)
         return predictions, losses
 
     def assign_targets_to_priors(self, gt_boxes, gt_labels, priors):
@@ -138,8 +188,16 @@ class MultiBoxHeads(nn.Module):
         boxes = gt_boxes[matches]
         return boxes, labels
 
+    def _get_num_priors(self, priors):
+        # type: (Tensor) -> Tensor
+        if torchvision._is_tracing():
+            num_anchors = _onnx_get_num_priors(priors)
+        else:
+            num_anchors = priors.shape[0]
+        return num_anchors
+
     def filter_priors(self, priors, pred_bbox_deltas, objectness):
-        # type: (Tensor, Tensor, Tensor) -> List[Dict[str, Tensor]]
+        # type: (Tensor, Tensor, Tensor) -> Tuple[Tensor, Tensor, Tensor]
         """
         At test time, Detect is the final layer of SSD. Decode location preds,
         apply non-maximum suppression to location predictions based on conf
@@ -147,29 +205,25 @@ class MultiBoxHeads(nn.Module):
         for both confidence score and locations.
 
         Args:
-            pred_bbox_deltas (tensor): [batch_size, num_priors x 4] predicted locations.
+            pred_bbox_deltas (tensor): [batch_size, num_priors, 4] predicted locations.
             objectness (tensor): [batch_size, num_priors, num_classes] class predictions.
             priors (tensor): [num_priors, 4] real boxes corresponding all the priors.
         """
         objectness = F.softmax(objectness, dim=2)
-        predictions = torch.jit.annotate(List[Dict[str, Tensor]], [])
-        num_images = pred_bbox_deltas.shape[0]
-        # device = pred_bbox_deltas.device
-        num_priors = priors.shape[0]
-        # objectness: batch_size x num_priors x num_classes
-        objectness = objectness.view(num_images, num_priors, -1)
+        num_priors = self._get_num_priors(priors)
 
-        # Decode predictions into bboxes.
-        for i in range(num_images):
-            decoded_boxes = self.box_coder.decode(pred_bbox_deltas[i], priors)  # num_priors x 4
+        final_boxes = []
+        final_scores = []
+        final_labels = []
+        for scores, bbox_reg in zip(objectness, pred_bbox_deltas):
+            decoded_boxes = self.box_coder.decode(bbox_reg, priors)  # num_priors x 4
             # For each class, perform nms
-            scores = objectness[i].clone()  # num_priors x num_classes
             num_priors, num_classes = scores.shape
 
-            decoded_boxes = decoded_boxes.view(num_priors, 1, 4)
+            decoded_boxes = decoded_boxes.reshape(num_priors, 1, 4)
             decoded_boxes = decoded_boxes.expand(num_priors, num_classes, 4)
             labels = torch.arange(num_classes, device=decoded_boxes.device)
-            labels = labels.view(1, num_classes).expand_as(scores)
+            labels = labels.reshape(1, num_classes).expand_as(scores)
 
             # remove predictions with the background label
             decoded_boxes = decoded_boxes[:, 1:]
@@ -192,33 +246,35 @@ class MultiBoxHeads(nn.Module):
             # keep only topk scoring predictions
             keep = keep[:self.post_nms_top_n]
 
-            decoded_boxes = decoded_boxes[keep]
-            scores = scores[keep]
-            labels = labels[keep]
+            decoded_boxes, scores, labels = decoded_boxes[keep], scores[keep], labels[keep]
+            final_boxes.append(decoded_boxes)
+            final_scores.append(scores)
+            final_labels.append(labels)
 
-            prediction = self.parse(labels, scores, decoded_boxes)
+        return final_boxes, final_scores, final_labels
+
+    def parse_predictions(self, boxes, scores, labels):
+        # type: (Tensor, Tensor, Tensor) -> List[Dict[str, Tensor]]
+
+        predictions = []
+
+        for box, score, label in zip(boxes, scores, labels):
+            prediction = {}
+
+            # Get detections with confidence higher than threshold.
+            top_indices = [i for i, conf in enumerate(score) if conf >= self.score_thresh]
+
+            top_box = box[top_indices, :]
+            top_score = score[top_indices]
+            top_label = label[top_indices]
+
+            prediction['boxes'] = torch.clamp(top_box, min=0.0, max=1.0)
+            prediction['scores'] = top_score
+            prediction['labels'] = top_label
+
             predictions.append(prediction)
 
         return predictions
-
-    def parse(self, det_label, det_conf, det_boxes):
-        # type: (Tensor, Tensor, Tensor) -> Dict[str, Tensor]
-        prediction = {}
-
-        # Get detections with confidence higher than threshold.
-        top_indices = [i for i, conf in enumerate(det_conf) if conf >= self.score_thresh]
-
-        top_label = det_label[top_indices]
-        top_conf = det_conf[top_indices]
-        top_boxes = det_boxes[top_indices, :]
-
-        prediction = {}
-
-        prediction['labels'] = top_label
-        prediction['scores'] = top_conf
-        prediction['boxes'] = torch.clamp(top_boxes, min=0.0, max=1.0)
-
-        return prediction
 
     def compute_loss(self, pred_loc, pred_conf, gt_loc, gt_labels):
         """Implement SSD MultiBox Loss. Basically, MultiBox loss combines
