@@ -1,7 +1,7 @@
 # De Monet - All of Object Detection
 
 <p align="left">
-  <a href="https://github.com/vanillapi/demonet"><img alt="GitHub Actions status" src="https://github.com/vanillapi/demonet/workflows/Setup%20Python/badge.svg"></a>
+  <a href="https://github.com/vanillapi/demonet/actions?query=workflow%3A%22Setup+Python%22"><img alt="GitHub Actions status" src="https://github.com/vanillapi/demonet/workflows/Setup%20Python/badge.svg"></a>
 </p>
 
 PyTorch training code and models reimplentation for object detection as described in [Liu et al. (2015), SSD: Single Shot MultiBox Detector](https://arxiv.org/abs/1512.02325). *Currently work in process, very pleasure for suggestion and cooperation.*
@@ -33,7 +33,7 @@ That's it, should be good to train and evaluate detection models.
 
 ## Pretrained Models
 
-We provide [`ssd_lite_mobilenet_v2`](models/ssd_mobilenet.py) pretrained model [weights](https://drive.google.com/file/d/1kxHTaxABJJuwxNsB10eAxkGRqLUnGXtL/view), with map 0.684 on VOC2007 test subset (Training using VOC2007 and VOC2012 trainval subset).
+We provide [`ssd_lite_mobilenet_v2`](models/ssd_mobilenet.py) pretrained model [weights](https://drive.google.com/file/d/11isfA_F3QUzsWVzflrY2MXJYqwNt2xCV/view?usp=sharing), with map 68.39 on VOC07 test subset (Training using VOC07+12 trainval subset).
 
 ```
 AP for aeroplane = 0.6822
@@ -136,5 +136,5 @@ CUDA_VISIBLE_DEVICES=[GPU_ID] python -m train \
 
 ## About the code
 
-- This repo borrows the architecture design and part of the code from [DETR](https://github.com/facebookresearch/detr).
+- This repo borrows the architecture design and part of the code from [DETR](https://github.com/facebookresearch/detr) and [torchvision](https://github.com/pytorch/vision/tree/master/torchvision/models/detection).
 - The implementation of `ssd_lite_mobilenet_v2` borrow the code from [pytorch-ssd](https://github.com/qfgaohao/pytorch-ssd).
