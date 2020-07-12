@@ -8,7 +8,7 @@ PyTorch training code and models reimplentation for object detection as describe
 
 ![Example of SSD Lite with mobilenet v2 backbone](.github/demo.png)
 
-# Usage
+## Usage 🛠
 
 There are no extra compiled components in DEMONET and package dependencies are minimal, so the code is very simple to use. We provide instructions how to install dependencies via conda. First, clone the repository locally:
 
@@ -31,7 +31,7 @@ pip install -U 'git+https://github.com/cocodataset/cocoapi.git#subdirectory=Pyth
 
 That's it, should be good to train and evaluate detection models.
 
-## Pretrained Models
+## Pretrained Models 🤗
 
 We provide [`ssd_lite_mobilenet_v2`](models/ssd_mobilenet.py) pretrained model [weights](https://drive.google.com/file/d/11isfA_F3QUzsWVzflrY2MXJYqwNt2xCV/view?usp=sharing), with map 68.39 on VOC07 test subset (Training using VOC07+12 trainval subset).
 
@@ -60,7 +60,7 @@ AP for tvmonitor = 0.6545
 Average Precision Across All Classes = 0.6839
 ```
 
-## Data preparation
+## Data preparation 📎
 
 Support trainint with COCO and PASCAL VOC format (chosen with the parameter `--dataset-file [coco/voc]`). With COCO format we expect the directory structure to be the following:
 
@@ -81,7 +81,7 @@ When you are using PASCAL VOC format, we expect the directory structure to be th
         └── VOC2012
 ```
 
-## Training
+## Training 🦄
 
 ```
 CUDA_VISIBLE_DEVICES=[GPU_ID] python -m train \
@@ -99,7 +99,7 @@ CUDA_VISIBLE_DEVICES=[GPU_ID] python -m train \
     --lr 0.01
 ```
 
-## Evaluation
+## Evaluation 🔬
 
 ### Evaluation on voc dataset
 
@@ -134,7 +134,8 @@ CUDA_VISIBLE_DEVICES=[GPU_ID] python -m train \
     --test-only
 ```
 
-## About the code
+
+## Acknowledgement 🎓
 
 - This repo borrows the architecture design and part of the code from [DETR](https://github.com/facebookresearch/detr) and [torchvision](https://github.com/pytorch/vision/tree/master/torchvision/models/detection).
 - The implementation of `ssd_lite_mobilenet_v2` borrow the code from [pytorch-ssd](https://github.com/qfgaohao/pytorch-ssd).
