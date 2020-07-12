@@ -86,8 +86,8 @@ class SSDLiteWithMobileNetV2(nn.Module):
             features.append(samples)
 
         for (x, b, c) in zip(features, self.bbox_pred, self.cls_logits):
-            box_regression.append(b(x).permute(0, 2, 3, 1).contiguous())
-            class_logits.append(c(x).permute(0, 2, 3, 1).contiguous())
+            box_regression.append(b(x))
+            class_logits.append(c(x))
 
         detections, detector_losses = self.multibox_heads(
             box_regression, class_logits, features, targets=targets)

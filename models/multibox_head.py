@@ -22,7 +22,8 @@ def _onnx_get_num_priors(ob):
 
 def permute_and_flatten(layer, N, A, C, H, W):
     # type: (Tensor, int, int, int, int, int) -> Tensor
-    layer = layer.view(N, H, W, -1, C)
+    layer = layer.view(N, -1, C, H, W)
+    layer = layer.permute(0, 3, 4, 1, 2)
     layer = layer.reshape(N, -1, C)
     return layer
 
@@ -38,8 +39,8 @@ def concat_box_prediction_layers(box_cls, box_regression):
     for box_cls_per_level, box_regression_per_level in zip(
         box_cls, box_regression
     ):
-        N, H, W, AxC = box_cls_per_level.shape
-        Ax4 = box_regression_per_level.shape[-1]
+        N, AxC, H, W = box_cls_per_level.shape
+        Ax4 = box_regression_per_level.shape[1]
         A = Ax4 // 4
         C = AxC // A
         box_cls_per_level = permute_and_flatten(
@@ -54,7 +55,6 @@ def concat_box_prediction_layers(box_cls, box_regression):
     # concatenate on the first dimension (representing the feature levels), to
     # take into account the way the labels were generated (with all feature maps
     # being concatenated as well)
-
     box_cls = torch.cat(box_cls_flattened, dim=1)
     box_regression = torch.cat(box_regression_flattened, dim=1)
     return box_cls, box_regression
