@@ -6,10 +6,11 @@ Backbone modules.
 import torch
 
 from torch import nn
-import torch.nn.functional as F
-from torchvision.models import mobilenet_v2
+
+from torchvision.models.mobilenet import InvertedResidual, mobilenet_v2
 from torchvision.models._utils import IntermediateLayerGetter
-from typing import Dict
+
+from typing import List
 
 from util.misc import NestedTensor, is_main_process
 
@@ -69,14 +70,26 @@ class BackboneBase(nn.Module):
         self.num_channels = num_channels
 
     def forward(self, tensor_list: NestedTensor):
-        xs = self.body(tensor_list.tensors)
-        out: Dict[str, NestedTensor] = {}
-        for name, x in xs.items():
-            m = tensor_list.mask
-            assert m is not None
-            mask = F.interpolate(m[None].float(), size=x.shape[-2:]).to(torch.bool)[0]
-            out[name] = NestedTensor(x, mask)
-        return out
+        samples = tensor_list.tensors
+        features = []
+
+        for k, feature in enumerate(self.body):
+            if k == 14:
+                for j, sub_feature in enumerate(feature.conv):
+                    samples = sub_feature(samples)
+                    if j == 0:
+                        features.append(samples)
+            else:
+                samples = feature(samples)
+
+        features.append(samples)
+
+        # apply extra layers and cache source layer outputs
+        for k, v in enumerate(self.extras):
+            samples = v(samples)
+            features.append(samples)
+
+        return features
 
 
 class BackboneWithMobileNet(BackboneBase):
@@ -89,3 +102,41 @@ class BackboneWithMobileNet(BackboneBase):
         return_layers = {"features": "0"}
         num_channels = 1280
         super().__init__(backbone, return_layers, train_backbone, num_channels)
+
+
+class ExtraLayers(nn.Sequential):
+    def __init__(self, in_channels):
+        super().__init__()
+
+        channels = [in_channels, 512, 256, 256, 64]
+        expand_ratio = [0.2, 0.25, 0.5, 0.25]
+
+        for i in range(len(expand_ratio)):
+            layers.append(InvertedResidual(channels[i], channels[i + 1], 2, expand_ratio[i]))
+
+        return layers
+
+
+class Joiner(nn.Sequential):
+    def __init__(self, backbone, extra_layers):
+        super().__init__(backbone, extra_layers)
+
+    def forward(self, tensor_list: NestedTensor):
+        xs = self[0](tensor_list)
+        out: List[NestedTensor] = []
+        pos = []
+        for name, x in xs.items():
+            out.append(x)
+            # extra layers
+            pos.append(self[1](x).to(x.tensors.dtype))
+
+        return out, pos
+
+
+def build_backbone(args):
+    train_backbone = args.lr_backbone > 0
+    backbone = BackboneWithMobileNet(args.backbone, train_backbone, args.dilation)
+    extra_layers = ExtraLayers()
+    model = Joiner(backbone, extra_layers)
+    model.num_channels = backbone.num_channels
+    return model

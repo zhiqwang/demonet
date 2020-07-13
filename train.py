@@ -39,8 +39,6 @@ def get_args_parser():
                         help='device')
     parser.add_argument('--score-thresh', default=0.01, type=float,
                         help='inference score threshold')
-    parser.add_argument("--onnx-export", action="store_true",
-                        help="Whether to export the model to onnx")
     parser.add_argument('--image-size', default=300, type=int,
                         help='input size of models')
     parser.add_argument('--num-classes', default=21, type=int,

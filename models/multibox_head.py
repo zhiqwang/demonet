@@ -6,7 +6,6 @@ import torchvision
 from torchvision.ops.boxes import box_iou, batched_nms
 
 from . import _utils as det_utils
-from .prior_box import AnchorGenerator
 
 from torch.jit.annotations import List, Optional, Dict, Tuple
 
@@ -18,6 +17,19 @@ def _onnx_get_num_priors(ob):
     num_anchors = operators.shape_as_tensor(ob)[0].unsqueeze(0)
 
     return num_anchors
+
+
+class SeperableConv2d(nn.Sequential):
+    """Replace Conv2d with a depthwise Conv2d and Pointwise Conv2d."""
+    def __init__(self, in_planes, out_planes, kernel_size, stride=1, padding=0, norm_layer=None):
+        if norm_layer is None:
+            norm_layer = nn.BatchNorm2d
+        super().__init__(
+            nn.Conv2d(in_planes, in_planes, kernel_size, stride=stride, padding=padding, groups=in_planes),
+            norm_layer(in_planes),
+            nn.ReLU6(inplace=True),
+            nn.Conv2d(in_planes, out_planes, 1),
+        )
 
 
 def permute_and_flatten(layer, N, A, C, H, W):
@@ -60,10 +72,13 @@ def concat_box_prediction_layers(box_cls, box_regression):
     return box_cls, box_regression
 
 
-class MultiBoxHeads(nn.Module):
+class MultiBox(nn.Module):
     """
     Implements MultiBox Heads.
     Arguments:
+        prior_generator (AnchorGenerator): module that generates the anchors for a set of feature
+            maps.
+        head (nn.Module): module that computes the objectness and regression deltas
     """
     __annotations__ = {
         'box_coder': det_utils.BoxCoder,
@@ -73,6 +88,8 @@ class MultiBoxHeads(nn.Module):
 
     def __init__(
         self,
+        prior_generator,
+        head,
         variances=[0.1, 0.2],
         iou_thresh=0.5,
         background_label=0,
@@ -80,27 +97,10 @@ class MultiBoxHeads(nn.Module):
         score_thresh=0.5,
         nms_thresh=0.45,
         post_nms_top_n=100,
-        # parameter for prior box generator
-        image_size=300,
-        aspect_ratios=[[2, 3], [2, 3], [2, 3], [2, 3], [2, 3], [2, 3]],
-        min_ratio=20,
-        max_ratio=80,
-        steps=[16, 32, 64, 100, 150, 300],
-        clip=False,
-        min_sizes=[60, 105, 150, 195, 240, 285],
-        max_sizes=[105, 150, 195, 240, 285, 330],
     ):
         super().__init__()
-        self.prior_generator = AnchorGenerator(
-            image_size=image_size,
-            aspect_ratios=aspect_ratios,
-            min_ratio=min_ratio,
-            max_ratio=max_ratio,
-            steps=steps,
-            clip=clip,
-            min_sizes=min_sizes,
-            max_sizes=max_sizes,
-        )
+        self.prior_generator = prior_generator
+        self.head = head
         self.box_coder = det_utils.BoxCoder(tuple(variances))
 
         # used during training
@@ -116,18 +116,18 @@ class MultiBoxHeads(nn.Module):
 
     def forward(
         self,
-        pred_bbox_deltas,  # type: List[Tensor]
-        objectness,  # type: List[Tensor]
         features,  # type: List[Tensor]
         targets=None,  # type: Optional[List[Dict[str, Tensor]]]
     ):
         # type: (...) -> Tuple[List[Dict[str, Tensor]], Dict[str, Tensor]]
-        objectness, pred_bbox_deltas = concat_box_prediction_layers(objectness, pred_bbox_deltas)
         priors = self.prior_generator(features)  # BoxMode: XYWHA_REL
+        objectness, pred_bbox_deltas = self.head(features)
 
-        gt_locations = torch.jit.annotate(List[Tensor], [])
-        gt_labels = torch.jit.annotate(List[Tensor], [])
-        predictions = torch.jit.annotate(List[Dict[str, Tensor]], [])
+        objectness, pred_bbox_deltas = concat_box_prediction_layers(objectness, pred_bbox_deltas)
+
+        gt_locations = []
+        gt_labels = []
+        predictions = {}
         losses = {}
         if self.training:
             assert targets is not None
