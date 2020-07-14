@@ -1,15 +1,18 @@
 import torch
 
-from models.ssd_mobilenet import SSDLiteWithMobileNetV2, build_backbone
+from models.backbone import BackboneWithMobileNet, ExtraLayers, Joiner
+from models.ssd_mobilenet import SSDLiteWithMobileNetV2
 
 dependencies = ["torch", "torchvision"]
 
 
-def _make_mobilenet_v2(num_classes, image_size, score_thresh=0.5):
-    backbone = build_backbone(train_backbone=False)
+def _make_mobilenet_v2(num_classes=21, image_size=300, score_thresh=0.5):
+    backbone = BackboneWithMobileNet(train_backbone=True)
+    extra_layers = ExtraLayers(backbone.num_channels)
+    backbone_with_extra_layers = Joiner(backbone, extra_layers)
 
     model = SSDLiteWithMobileNetV2(
-        backbone,
+        backbone_with_extra_layers,
         num_classes=num_classes,
         image_size=image_size,
         score_thresh=score_thresh,

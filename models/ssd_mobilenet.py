@@ -33,7 +33,6 @@ class SSDLiteWithMobileNetV2(GeneralizedSSD):
         nms_thresh=0.45,
         post_nms_top_n=100,
     ):
-        super().__init__()
 
         prior_generator = AnchorGenerator(
             image_size, aspect_ratios, min_ratio, max_ratio, steps,

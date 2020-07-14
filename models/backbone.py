@@ -99,10 +99,10 @@ class BackboneWithMobileNet(BackboneBase):
         self,
         train_backbone: bool,
     ):
-        backbone = mobilenet_v2(pretrained=is_main_process(), norm_layer=FrozenBatchNorm2d)
+        backbone = mobilenet_v2(pretrained=is_main_process(), norm_layer=None)
         return_layers = {"features": "0"}
         num_channels = 1280
-        super().__init__(backbone, return_layers, train_backbone, num_channels)
+        super().__init__(backbone, train_backbone, num_channels, return_layers)
 
 
 class ExtraLayers(nn.Module):
