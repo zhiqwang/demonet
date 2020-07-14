@@ -1,17 +1,12 @@
-import warnings
+# Copyright (c) 2020, Zhiqiang Wang. All Rights Reserved.
 
-import torch
-from torch import nn, Tensor
-
-from util.misc import NestedTensor, nested_tensor_from_tensor_list
-
+from .generalized_ssd import GeneralizedSSD
 from .backbone import build_backbone
-from .multibox_head import MultiBox
+from .prior_box import AnchorGenerator
+from .multibox_head import MultiBoxLite, MultiBoxHeads
 
-from torch.jit.annotations import List, Optional, Dict, Tuple
 
-
-class SSDLiteWithMobileNetV2(nn.Module):
+class SSDLiteWithMobileNetV2(GeneralizedSSD):
     r"""MobileNet V2 SSD model class
     Args:
         backbone: MobileNet V2 backbone layers with extra layers
@@ -20,7 +15,8 @@ class SSDLiteWithMobileNetV2(nn.Module):
     def __init__(
         self,
         backbone,
-        score_thresh=0.3,
+        num_classes=21,
+        # Anchor parameters
         image_size=300,
         aspect_ratios=[[2, 3], [2, 3], [2, 3], [2, 3], [2, 3], [2, 3]],
         min_ratio=20,
@@ -29,62 +25,32 @@ class SSDLiteWithMobileNetV2(nn.Module):
         clip=True,
         min_sizes=[60, 105, 150, 195, 240, 285],
         max_sizes=[105, 150, 195, 240, 285, 330],
+        # Box parameter
+        variances=[0.1, 0.2],
+        iou_thresh=0.5,
+        negative_positive_ratio=3,
+        score_thresh=0.5,
+        nms_thresh=0.45,
+        post_nms_top_n=100,
     ):
         super().__init__()
 
-        self.backbone = backbone
-        self.multibox_heads = MultiBox(
-            score_thresh,
+        prior_generator = AnchorGenerator(
             image_size, aspect_ratios, min_ratio, max_ratio, steps,
             clip, min_sizes, max_sizes,
         )
-        # used only on torchscript mode
-        self._has_warned = False
 
-    @torch.jit.unused
-    def eager_outputs(
-        self,
-        losses,  # type: Dict[str, Tensor]
-        detections,  # type: List[Dict[str, Tensor]]
-    ):
-        # type: (...) -> Tuple[Dict[str, Tensor], List[Dict[str, Tensor]]]
-        if self.training:
-            return losses
+        hidden_dims = [576, 1280, 512, 256, 256, 64]
+        num_anchors = [6, 6, 6, 6, 6, 6]  # number of boxes per feature map location
+        box_head = MultiBoxLite(hidden_dims, num_anchors, num_classes)
 
-        return detections
+        multibox_heads = MultiBoxHeads(
+            prior_generator, box_head,
+            variances, iou_thresh, negative_positive_ratio,
+            score_thresh, nms_thresh, post_nms_top_n,
+        )
 
-    def forward(
-        self,
-        samples,  # type: NestedTensor
-        targets=None,  # type: Optional[List[Dict[str, Tensor]]]
-    ):
-        # type: (...) -> Tuple[Dict[str, Tensor], List[Dict[str, Tensor]]]
-        """
-        Arguments:
-            samples (NestedTensor): Expects a NestedTensor, which consists of:
-               - samples.tensor: batched images, of shape [batch_size x 3 x H x W]
-            targets (List[Dict[Tensor]]): ground-truth boxes present in the image (optional)
-
-        Returns:
-            result (list[BoxList] or dict[Tensor]): the output from the model.
-                During training, it returns a dict[Tensor] which contains the losses.
-                During testing, it returns list[BoxList] contains additional fields
-                like `scores`, `labels` and `mask` (for Mask R-CNN models).
-        """
-        if isinstance(samples, (list, torch.Tensor)):
-            samples = nested_tensor_from_tensor_list(samples)
-        features = self.backbone(samples)
-
-        detections, detector_losses = self.multibox_heads(features, targets=targets)
-
-        return self.eager_outputs(detector_losses, detections)
-        if torch.jit.is_scripting():
-            if not self._has_warned:
-                warnings.warn("DEMONET always returns a (Losses, Detections) tuple in scripting")
-                self._has_warned = True
-            return (detector_losses, detections)
-        else:
-            return self.eager_outputs(detector_losses, detections)
+        super().__init__(backbone, multibox_heads)
 
 
 model_urls = {'ssd_lite_mobilenet_v2': ''}
@@ -97,12 +63,13 @@ def build(args):
             "MobileNetV2SSD300 (image_size=300) is supported!".format(args.image_size),
         )
 
-    backbone = build_backbone(train_backbone=True)
+    backbone = build_backbone(args)
 
     model = SSDLiteWithMobileNetV2(
         backbone,
-        score_thresh=args.score_thresh,
+        num_classes=args.num_classes,
         image_size=args.image_size,
+        score_thresh=args.score_thresh,
     )
 
     return model

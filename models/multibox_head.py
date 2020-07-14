@@ -1,3 +1,6 @@
+# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved.
+# Modified by Zhiqiang Wang (zhiqwang@outlook.com)
+
 import torch
 from torch import nn, Tensor
 import torch.nn.functional as F
@@ -30,6 +33,41 @@ class SeperableConv2d(nn.Sequential):
             nn.ReLU6(inplace=True),
             nn.Conv2d(in_planes, out_planes, 1),
         )
+
+
+class MultiBoxLite(nn.Module):
+    """
+    Adds a simple MultiBox Lite Head with classification and regression heads
+    Arguments:
+        hidden_dims (list): number of channels of the input feature
+        num_anchors (list): number of anchors to be predicted
+    """
+
+    def __init__(self, hidden_dims, num_anchors, num_classes):
+        super().__init__()
+
+        cls_logits = []
+        bbox_preds = []
+
+        for i in range(len(hidden_dims) - 1):
+            cls_logits.append(SeperableConv2d(hidden_dims[i], num_anchors[i] * num_classes, 3, padding=1))
+            bbox_preds.append(SeperableConv2d(hidden_dims[i], num_anchors[i] * 4, 3, padding=1))
+
+        cls_logits.append(nn.Conv2d(hidden_dims[-1], num_anchors[-1] * num_classes, 1))
+        bbox_preds.append(nn.Conv2d(hidden_dims[-1], num_anchors[-1] * 4, 1))
+
+        self.cls_logits = nn.ModuleList(cls_logits)
+        self.bbox_preds = nn.ModuleList(bbox_preds)
+
+    def forward(self, features):
+        # type: (List[Tensor]) -> Tuple[List[Tensor], List[Tensor]]
+        logits = []
+        bbox_regs = []
+        for (feature, cls_logit, bbox_pred) in zip(features, self.cls_logits, self.bbox_preds):
+            logits.append(cls_logit(feature))
+            bbox_regs.append(bbox_pred(feature))
+
+        return logits, bbox_regs
 
 
 def permute_and_flatten(layer, N, A, C, H, W):
@@ -72,7 +110,7 @@ def concat_box_prediction_layers(box_cls, box_regression):
     return box_cls, box_regression
 
 
-class MultiBox(nn.Module):
+class MultiBoxHeads(nn.Module):
     """
     Implements MultiBox Heads.
     Arguments:
@@ -90,13 +128,12 @@ class MultiBox(nn.Module):
         self,
         prior_generator,
         head,
-        variances=[0.1, 0.2],
-        iou_thresh=0.5,
-        background_label=0,
-        negative_positive_ratio=3,
-        score_thresh=0.5,
-        nms_thresh=0.45,
-        post_nms_top_n=100,
+        variances,
+        iou_thresh,
+        negative_positive_ratio,
+        score_thresh,
+        nms_thresh,
+        post_nms_top_n,
     ):
         super().__init__()
         self.prior_generator = prior_generator

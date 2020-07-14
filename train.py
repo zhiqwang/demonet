@@ -1,3 +1,6 @@
+# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved.
+# Modified by Zhiqiang Wang (zhiqwang@outlook.com)
+
 import datetime
 import os
 import argparse
@@ -52,6 +55,7 @@ def get_args_parser():
     parser.add_argument('--lr', default=0.02, type=float,
                         help='initial learning rate, 0.02 is the default value for training '
                         'on 8 gpus and 2 images_per_gpu')
+    parser.add_argument('--lr-backbone', default=1e-5, type=float)
     parser.add_argument('--lr-scheduler', default='cosine',
                         help='Scheduler for SGD, It can be chosed to multi-step or cosine')
     parser.add_argument('--momentum', default=0.9, type=float, metavar='M',

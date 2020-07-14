@@ -1,4 +1,5 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
+# Modified by Zhiqiang Wang (zhiqwang@outlook.com)
 """
 Backbone modules.
 """
@@ -57,9 +58,9 @@ class BackboneBase(nn.Module):
     def __init__(
         self,
         backbone: nn.Module,
-        return_layers: dict,
         train_backbone: bool,
         num_channels: int,
+        return_layers: dict,
     ):
         super().__init__()
         for name, parameter in backbone.named_parameters():
@@ -104,17 +105,20 @@ class BackboneWithMobileNet(BackboneBase):
         super().__init__(backbone, return_layers, train_backbone, num_channels)
 
 
-class ExtraLayers(nn.Sequential):
+class ExtraLayers(nn.Module):
     def __init__(self, in_channels):
         super().__init__()
+        extra_layers = []
 
-        channels = [in_channels, 512, 256, 256, 64]
-        expand_ratio = [0.2, 0.25, 0.5, 0.25]
+        hidden_dims = [512, 256, 256, 64]
+        expand_ratios = [0.2, 0.25, 0.5, 0.25]
+        strides = [2, 2, 2, 2]
 
-        for i in range(len(expand_ratio)):
-            layers.append(InvertedResidual(channels[i], channels[i + 1], 2, expand_ratio[i]))
+        for i in range(len(expand_ratios)):
+            inp = hidden_dims[i - 1] if i > 0 else in_channels
+            extra_layers.append(InvertedResidual(inp, hidden_dims[i], strides[i], expand_ratios[i]))
 
-        return layers
+        self.extra_layers = nn.ModuleList(extra_layers)
 
 
 class Joiner(nn.Sequential):
@@ -124,19 +128,19 @@ class Joiner(nn.Sequential):
     def forward(self, tensor_list: NestedTensor):
         xs = self[0](tensor_list)
         out: List[NestedTensor] = []
-        pos = []
+        features = []
         for name, x in xs.items():
             out.append(x)
             # extra layers
-            pos.append(self[1](x).to(x.tensors.dtype))
+            features.append(self[1](x).to(x.tensors.dtype))
 
-        return out, pos
+        return out, features
 
 
 def build_backbone(args):
     train_backbone = args.lr_backbone > 0
-    backbone = BackboneWithMobileNet(args.backbone, train_backbone, args.dilation)
-    extra_layers = ExtraLayers()
+    backbone = BackboneWithMobileNet(train_backbone)
+    extra_layers = ExtraLayers(backbone.num_channels)
     model = Joiner(backbone, extra_layers)
-    model.num_channels = backbone.num_channels
+
     return model

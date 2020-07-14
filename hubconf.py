@@ -1,30 +1,18 @@
 import torch
 
-from models.ssd_mobilenet import SSDLiteWithMobileNetV2, build_backbone, build_extras, build_multibox
+from models.ssd_mobilenet import SSDLiteWithMobileNetV2, build_backbone
 
 dependencies = ["torch", "torchvision"]
 
 
-def _make_mobilenet_v2(num_classes, image_size, onnx_export=False, score_thresh=0.5):
+def _make_mobilenet_v2(num_classes, image_size, score_thresh=0.5):
     backbone = build_backbone(train_backbone=False)
-    extras_layers = build_extras(backbone.num_channels)
-    anchor_nms_cfg = [6, 6, 6, 6, 6, 6]  # number of boxes per feature map location
-    head_layers = build_multibox(anchor_nms_cfg, num_classes)
 
     model = SSDLiteWithMobileNetV2(
         backbone,
-        extras_layers,
-        head_layers,
-        onnx_export=onnx_export,
-        score_thresh=score_thresh,
+        num_classes=num_classes,
         image_size=image_size,
-        aspect_ratios=[[2, 3], [2, 3], [2, 3], [2, 3], [2, 3], [2, 3]],
-        min_ratio=20,
-        max_ratio=80,
-        steps=[16, 32, 64, 100, 150, 300],
-        clip=True,
-        min_sizes=[60, 105, 150, 195, 240, 285],
-        max_sizes=[105, 150, 195, 240, 285, 330],
+        score_thresh=score_thresh,
     )
 
     return model
@@ -37,7 +25,6 @@ def ssd_lite_mobilenet_v2(
     pretrained=False,
     num_classes=21,
     image_size=300,
-    onnx_export=False,
     score_thresh=0.5,
     return_postprocessor=False,
 ):
@@ -48,7 +35,6 @@ def ssd_lite_mobilenet_v2(
     model = _make_mobilenet_v2(
         num_classes=num_classes,
         image_size=image_size,
-        onnx_export=onnx_export,
         score_thresh=score_thresh,
     )
     if pretrained:
