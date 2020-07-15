@@ -3,7 +3,7 @@
 from .generalized_ssd import GeneralizedSSD
 from .backbone import build_backbone
 from .prior_box import AnchorGenerator
-from .multibox_head import MultiBoxLite, MultiBoxHeads
+from .box_head import MultiBoxLiteHead, SSDBoxHeads
 
 
 class SSDLiteWithMobileNetV2(GeneralizedSSD):
@@ -41,15 +41,15 @@ class SSDLiteWithMobileNetV2(GeneralizedSSD):
 
         hidden_dims = [576, 1280, 512, 256, 256, 64]
         num_anchors = [6, 6, 6, 6, 6, 6]  # number of boxes per feature map location
-        box_head = MultiBoxLite(hidden_dims, num_anchors, num_classes)
+        multibox_head = MultiBoxLiteHead(hidden_dims, num_anchors, num_classes)
 
-        multibox_heads = MultiBoxHeads(
-            prior_generator, box_head,
+        ssd_box_heads = SSDBoxHeads(
+            prior_generator, multibox_head,
             variances, iou_thresh, negative_positive_ratio,
             score_thresh, nms_thresh, post_nms_top_n,
         )
 
-        super().__init__(backbone, multibox_heads)
+        super().__init__(backbone, ssd_box_heads)
 
 
 model_urls = {'ssd_lite_mobilenet_v2': ''}

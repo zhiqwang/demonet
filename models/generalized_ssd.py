@@ -20,14 +20,14 @@ class GeneralizedSSD(nn.Module):
     Main class for Generalized R-CNN.
     Arguments:
         backbone (nn.Module):
-        multibox_heads (nn.Module): takes the features + the proposals from the multibox and computes
+        ssd_box_heads (nn.Module): takes the features + the proposals from the multibox and computes
             detections from it.
     """
 
-    def __init__(self, backbone, multibox_heads):
+    def __init__(self, backbone, ssd_box_heads):
         super().__init__()
         self.backbone = backbone
-        self.multibox_heads = multibox_heads
+        self.ssd_box_heads = ssd_box_heads
         # used only on torchscript mode
         self._has_warned = False
 
@@ -57,7 +57,7 @@ class GeneralizedSSD(nn.Module):
             samples = nested_tensor_from_tensor_list(samples)
         features = self.backbone(samples)
 
-        detections, detector_losses = self.multibox_heads(features, targets=targets)
+        detections, detector_losses = self.ssd_box_heads(features, targets=targets)
 
         if torch.jit.is_scripting():
             if not self._has_warned:

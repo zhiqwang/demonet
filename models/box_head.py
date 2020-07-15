@@ -35,7 +35,7 @@ class SeperableConv2d(nn.Sequential):
         )
 
 
-class MultiBoxLite(nn.Module):
+class MultiBoxLiteHead(nn.Module):
     """
     Adds a simple MultiBox Lite Head with classification and regression heads
     Arguments:
@@ -47,27 +47,27 @@ class MultiBoxLite(nn.Module):
         super().__init__()
 
         cls_logits = []
-        bbox_preds = []
+        bbox_pred = []
 
         for i in range(len(hidden_dims) - 1):
             cls_logits.append(SeperableConv2d(hidden_dims[i], num_anchors[i] * num_classes, 3, padding=1))
-            bbox_preds.append(SeperableConv2d(hidden_dims[i], num_anchors[i] * 4, 3, padding=1))
+            bbox_pred.append(SeperableConv2d(hidden_dims[i], num_anchors[i] * 4, 3, padding=1))
 
         cls_logits.append(nn.Conv2d(hidden_dims[-1], num_anchors[-1] * num_classes, 1))
-        bbox_preds.append(nn.Conv2d(hidden_dims[-1], num_anchors[-1] * 4, 1))
+        bbox_pred.append(nn.Conv2d(hidden_dims[-1], num_anchors[-1] * 4, 1))
 
         self.cls_logits = nn.ModuleList(cls_logits)
-        self.bbox_preds = nn.ModuleList(bbox_preds)
+        self.bbox_pred = nn.ModuleList(bbox_pred)
 
     def forward(self, features):
         # type: (List[Tensor]) -> Tuple[List[Tensor], List[Tensor]]
         logits = []
-        bbox_regs = []
-        for (feature, cls_logit, bbox_pred) in zip(features, self.cls_logits, self.bbox_preds):
+        bbox_reg = []
+        for (feature, cls_logit, bbox_pred) in zip(features, self.cls_logits, self.bbox_pred):
             logits.append(cls_logit(feature))
-            bbox_regs.append(bbox_pred(feature))
+            bbox_reg.append(bbox_pred(feature))
 
-        return logits, bbox_regs
+        return logits, bbox_reg
 
 
 def permute_and_flatten(layer, N, A, C, H, W):
@@ -110,13 +110,13 @@ def concat_box_prediction_layers(box_cls, box_regression):
     return box_cls, box_regression
 
 
-class MultiBoxHeads(nn.Module):
+class SSDBoxHeads(nn.Module):
     """
-    Implements MultiBox Heads.
+    Implements MultiBox based SSD Heads.
     Arguments:
         prior_generator (AnchorGenerator): module that generates the anchors for a set of feature
             maps.
-        head (nn.Module): module that computes the objectness and regression deltas
+        multibox_head (nn.Module): module that computes the objectness and regression deltas
     """
     __annotations__ = {
         'box_coder': det_utils.BoxCoder,
@@ -127,7 +127,7 @@ class MultiBoxHeads(nn.Module):
     def __init__(
         self,
         prior_generator,
-        head,
+        multibox_head,
         variances,
         iou_thresh,
         negative_positive_ratio,
@@ -137,7 +137,7 @@ class MultiBoxHeads(nn.Module):
     ):
         super().__init__()
         self.prior_generator = prior_generator
-        self.head = head
+        self.multibox_head = multibox_head
         self.box_coder = det_utils.BoxCoder(tuple(variances))
 
         # used during training
@@ -158,7 +158,7 @@ class MultiBoxHeads(nn.Module):
     ):
         # type: (...) -> Tuple[List[Dict[str, Tensor]], Dict[str, Tensor]]
         priors = self.prior_generator(features)  # BoxMode: XYWHA_REL
-        objectness, pred_bbox_deltas = self.head(features)
+        objectness, pred_bbox_deltas = self.multibox_head(features)
 
         objectness, pred_bbox_deltas = concat_box_prediction_layers(objectness, pred_bbox_deltas)
 
