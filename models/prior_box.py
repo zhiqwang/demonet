@@ -1,5 +1,5 @@
-import math
-
+# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
+# Modified by Zhiqiang Wang (zhiqwang@outlook.com)
 import torch
 from torch import nn, Tensor
 from torch.jit.annotations import List, Optional, Dict, Tuple
@@ -25,56 +25,36 @@ class AnchorGenerator(nn.Module):
     sizes[i] and aspect_ratios[i] can have an arbitrary number of elements,
     and AnchorGenerator will output a set of (2 * len(aspect_ratios[i]) + 2) priors
     per spatial location for feature map i.
+
+    Arguments:
+        image_size (int): resized image size.
+        aspect_ratios (List[List[int]]): optional aspect ratios of the boxes. can be multiple
+        min_sizes (List[int]): minimum box size in pixels. can be multiple. required!.
+        max_sizes (List[int]): maximum box size in pixels. can be ignored or same as the of min_size.
+        clip (bool): whether clip prior boxes.
     """
     def __init__(
         self,
-        image_size=300,
+        image_size=320,
         aspect_ratios=[[2, 3], [2, 3], [2, 3], [2, 3], [2, 3], [2, 3]],
-        min_ratio=20,
-        max_ratio=80,
-        steps=[16, 32, 64, 100, 150, 300],
-        clip=True,
         min_sizes=[60, 105, 150, 195, 240, 285],
         max_sizes=[105, 150, 195, 240, 285, 330],
+        clip=True,
     ):
         super().__init__()
         self.image_size = image_size
-        self.min_ratio = min_ratio
-        self.max_ratio = max_ratio
 
-        if min_sizes is not None:
-            self.min_sizes, self.max_sizes = min_sizes, max_sizes
-        else:
-            self.min_sizes, self.max_sizes = self.compute_sizes()
+        self.min_sizes = min_sizes
+        self.max_sizes = max_sizes
         assert len(self.min_sizes) == len(self.max_sizes)
 
-        self.steps = tuple(steps)
         self.sizes = tuple((s,) for s in self.min_sizes)
-        assert len(self.sizes) == len(self.steps)
-
         self.aspect_ratios, self.scale_ratios = self.compute_ratios(aspect_ratios)
         assert len(self.sizes) == len(self.aspect_ratios)
 
         self.clip = clip
         self.cell_anchors = None
         self._cache = {}
-
-    def compute_sizes(self):
-        step = int(math.floor(self.max_ratio - self.min_ratio) / (len(self.aspect_ratios) - 2))
-        min_sizes = list()
-        max_sizes = list()
-        for ratio in range(self.min_ratio, self.max_ratio + 1, step):
-            min_sizes.append(self.image_size * ratio / 100)
-            max_sizes.append(self.image_size * (ratio + step) / 100)
-
-        if self.min_ratio == 20:
-            min_sizes = [self.image_size * 10 / 100.] + min_sizes
-            max_sizes = [self.image_size * 20 / 100.] + max_sizes
-        else:
-            min_sizes = [self.image_size * 7 / 100.] + min_sizes
-            max_sizes = [self.image_size * 15 / 100.] + max_sizes
-
-        return min_sizes, max_sizes
 
     def compute_ratios(self, aspect_ratios):
         # type: (List(float)) -> Tuple(List(float), List(float))
@@ -181,8 +161,8 @@ class AnchorGenerator(nn.Module):
         # type: (List[Tensor]) -> Tensor
         grid_sizes = list([feature_map.shape[-2:] for feature_map in feature_maps])
         dtype, device = feature_maps[0].dtype, feature_maps[0].device
-        strides = [[torch.tensor(s, dtype=torch.int64, device=device),
-                    torch.tensor(s, dtype=torch.int64, device=device)] for s in self.steps]
+        strides = [[torch.tensor(self.image_size // g[0], dtype=torch.int64, device=device),
+                    torch.tensor(self.image_size // g[1], dtype=torch.int64, device=device)] for g in grid_sizes]
         self.set_cell_anchors(dtype, device)
         anchors_over_all_feature_maps = self.cached_grid_anchors(grid_sizes, strides)
         anchors_in_image = torch.jit.annotate(List[torch.Tensor], [])

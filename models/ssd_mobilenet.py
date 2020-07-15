@@ -15,17 +15,17 @@ class SSDLiteWithMobileNetV2(GeneralizedSSD):
     def __init__(
         self,
         backbone,
-        num_classes=21,
         # Anchor parameters
-        image_size=300,
+        image_size=320,
         aspect_ratios=[[2, 3], [2, 3], [2, 3], [2, 3], [2, 3], [2, 3]],
-        min_ratio=20,
-        max_ratio=80,
-        steps=[16, 32, 64, 100, 150, 300],
-        clip=True,
         min_sizes=[60, 105, 150, 195, 240, 285],
         max_sizes=[105, 150, 195, 240, 285, 330],
-        # Box parameter
+        clip=True,
+        # Multi Box parameter
+        hidden_dims=[576, 1280, 512, 256, 256, 64],
+        num_anchors=[6, 6, 6, 6, 6, 6],  # number of boxes per feature map location
+        num_classes=21,
+        # SSD Box parameter
         variances=[0.1, 0.2],
         iou_thresh=0.5,
         negative_positive_ratio=3,
@@ -34,13 +34,8 @@ class SSDLiteWithMobileNetV2(GeneralizedSSD):
         post_nms_top_n=100,
     ):
 
-        prior_generator = AnchorGenerator(
-            image_size, aspect_ratios, min_ratio, max_ratio, steps,
-            clip, min_sizes, max_sizes,
-        )
+        prior_generator = AnchorGenerator(image_size, aspect_ratios, min_sizes, max_sizes, clip)
 
-        hidden_dims = [576, 1280, 512, 256, 256, 64]
-        num_anchors = [6, 6, 6, 6, 6, 6]  # number of boxes per feature map location
         multibox_head = MultiBoxLiteHead(hidden_dims, num_anchors, num_classes)
 
         ssd_box_heads = SSDBoxHeads(
@@ -66,9 +61,9 @@ def build(args):
 
     model = SSDLiteWithMobileNetV2(
         backbone,
-        num_classes=args.num_classes,
         image_size=args.image_size,
         score_thresh=args.score_thresh,
+        num_classes=args.num_classes,
     )
 
     return model
