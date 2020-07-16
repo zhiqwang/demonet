@@ -40,7 +40,7 @@ def main(args):
 
     # load model weights
     checkpoint = torch.load(args.resume, map_location="cpu")
-    model.load_state_dict(checkpoint)
+    model.load_state_dict(checkpoint['model'])
 
     output_dir = Path(args.output_dir)
     # evaluation
@@ -132,6 +132,7 @@ if __name__ == "__main__":
                         help='images per gpu, the total batch size is $NGPU x batch_size')
     parser.add_argument('--num-workers', default=4, type=int, metavar='N',
                         help='number of data loading workers (default: 4)')
+    parser.add_argument('--lr-backbone', default=-1, type=float)
     parser.add_argument('--print-freq', default=20, type=int,
                         help='print frequency')
     parser.add_argument('--output-dir', default='.',
