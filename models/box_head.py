@@ -46,26 +46,62 @@ class MultiBoxLiteHead(nn.Module):
     def __init__(self, hidden_dims, num_anchors, num_classes):
         super().__init__()
 
-        cls_logits = []
-        bbox_pred = []
+        self.cls_logits = nn.ModuleList()
+        self.bbox_pred = nn.ModuleList()
 
         for i in range(len(hidden_dims) - 1):
-            cls_logits.append(SeperableConv2d(hidden_dims[i], num_anchors[i] * num_classes, 3, padding=1))
-            bbox_pred.append(SeperableConv2d(hidden_dims[i], num_anchors[i] * 4, 3, padding=1))
+            self.cls_logits.append(SeperableConv2d(hidden_dims[i], num_anchors[i] * num_classes, 3, padding=1))
+            self.bbox_pred.append(SeperableConv2d(hidden_dims[i], num_anchors[i] * 4, 3, padding=1))
 
-        cls_logits.append(nn.Conv2d(hidden_dims[-1], num_anchors[-1] * num_classes, 1))
-        bbox_pred.append(nn.Conv2d(hidden_dims[-1], num_anchors[-1] * 4, 1))
+        self.cls_logits.append(nn.Conv2d(hidden_dims[-1], num_anchors[-1] * num_classes, 1))
+        self.bbox_pred.append(nn.Conv2d(hidden_dims[-1], num_anchors[-1] * 4, 1))
 
-        self.cls_logits = nn.ModuleList(cls_logits)
-        self.bbox_pred = nn.ModuleList(bbox_pred)
+    def get_result_from_cls_logits(self, x, idx):
+        # type: (Tensor, int) -> Tensor
+        """
+        This is equivalent to self.cls_logits[idx](x),
+        but torchscript doesn't support this yet
+        """
+        num_blocks = 0
+        for m in self.cls_logits:
+            num_blocks += 1
+        if idx < 0:
+            idx += num_blocks
+        i = 0
+        out = x
+        for module in self.cls_logits:
+            if i == idx:
+                out = module(x)
+            i += 1
+        return out
+
+    def get_result_from_bbox_pred(self, x, idx):
+        # type: (Tensor, int) -> Tensor
+        """
+        This is equivalent to self.bbox_pred[idx](x),
+        but torchscript doesn't support this yet
+        """
+        num_blocks = 0
+        for m in self.bbox_pred:
+            num_blocks += 1
+        if idx < 0:
+            idx += num_blocks
+        i = 0
+        out = x
+        for module in self.bbox_pred:
+            if i == idx:
+                out = module(x)
+            i += 1
+        return out
 
     def forward(self, features):
         # type: (List[Tensor]) -> Tuple[List[Tensor], List[Tensor]]
         logits = []
         bbox_reg = []
-        for (feature, cls_logit, bbox_pred) in zip(features, self.cls_logits, self.bbox_pred):
-            logits.append(cls_logit(feature))
-            bbox_reg.append(bbox_pred(feature))
+
+        for i in range(len(features)):
+            logits.append(self.get_result_from_cls_logits(features[i], i))
+            bbox_reg.append(self.get_result_from_bbox_pred(features[i], i))
 
         return logits, bbox_reg
 

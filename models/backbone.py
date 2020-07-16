@@ -5,7 +5,7 @@ Backbone modules.
 """
 
 import torch
-from torch import nn
+from torch import nn, Tensor
 
 from torchvision.models.mobilenet import InvertedResidual, mobilenet_v2
 from torchvision.models._utils import IntermediateLayerGetter
@@ -72,12 +72,12 @@ class BackboneBase(nn.Module):
 
     def forward(self, tensor_list: NestedTensor):
         xs_body = self.body(tensor_list.tensors)
-        out: List[NestedTensor] = []
+        out: List[Tensor] = []
 
         for name, x in xs_body.items():
             out.append(x)
 
-        xs_extra_blocks = self.extra_blocks(x)
+        xs_extra_blocks = self.extra_blocks(out[-1])
         for name, x in xs_extra_blocks.items():
             out.append(x)
         return out
