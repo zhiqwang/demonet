@@ -5,7 +5,6 @@ Backbone modules.
 """
 
 import torch
-
 from torch import nn
 
 from torchvision.models.mobilenet import InvertedResidual, mobilenet_v2
@@ -58,89 +57,71 @@ class BackboneBase(nn.Module):
     def __init__(
         self,
         backbone: nn.Module,
+        extra_blocks: nn.Module,
         train_backbone: bool,
-        num_channels: int,
-        return_layers: dict,
+        return_layers_backbone: dict,
+        return_layers_extra_blocks: dict,
     ):
         super().__init__()
         for name, parameter in backbone.named_parameters():
             if not train_backbone or "features" not in name:
                 parameter.requires_grad_(False)
 
-        self.body = IntermediateLayerGetter(backbone, return_layers=return_layers)
-        self.num_channels = num_channels
+        self.body = IntermediateLayerGetter(backbone, return_layers=return_layers_backbone)
+        self.extra_blocks = IntermediateLayerGetter(extra_blocks, return_layers=return_layers_extra_blocks)
 
     def forward(self, tensor_list: NestedTensor):
-        samples = tensor_list.tensors
-        features = []
+        xs_body = self.body(tensor_list.tensors)
+        out: List[NestedTensor] = []
 
-        for k, feature in enumerate(self.body):
-            if k == 14:
-                for j, sub_feature in enumerate(feature.conv):
-                    samples = sub_feature(samples)
-                    if j == 0:
-                        features.append(samples)
-            else:
-                samples = feature(samples)
+        for name, x in xs_body.items():
+            out.append(x)
 
-        features.append(samples)
-
-        # apply extra layers and cache source layer outputs
-        for k, v in enumerate(self.extras):
-            samples = v(samples)
-            features.append(samples)
-
-        return features
+        xs_extra_blocks = self.extra_blocks(x)
+        for name, x in xs_extra_blocks.items():
+            out.append(x)
+        return out
 
 
-class BackboneWithMobileNet(BackboneBase):
-    """MobileNet backbone with frozen BatchNorm."""
+class MobileNetWithExtraBlocks(BackboneBase):
+    """MobileNet backbone with extra blocks."""
     def __init__(
         self,
         train_backbone: bool,
     ):
-        backbone = mobilenet_v2(pretrained=is_main_process(), norm_layer=None)
-        return_layers = {"features": "0"}
+        backbone = mobilenet_v2(pretrained=is_main_process(),
+                                norm_layer=FrozenBatchNorm2d).features
+        return_layers_backbone = {"13": "0", "18": "1"}
+
         num_channels = 1280
-        super().__init__(backbone, train_backbone, num_channels, return_layers)
-
-
-class ExtraLayers(nn.Module):
-    def __init__(self, in_channels):
-        super().__init__()
-        extra_layers = []
-
         hidden_dims = [512, 256, 256, 64]
         expand_ratios = [0.2, 0.25, 0.5, 0.25]
         strides = [2, 2, 2, 2]
+        extra_blocks = ExtraBlocks(num_channels, hidden_dims, expand_ratios, strides)
+        return_layers_extra_blocks = {"0": "2", "1": "3", "2": "4", "3": "5"}
+
+        super().__init__(
+            backbone,
+            extra_blocks,
+            train_backbone,
+            return_layers_backbone,
+            return_layers_extra_blocks,
+        )
+
+
+class ExtraBlocks(nn.Sequential):
+    def __init__(self, in_channels, hidden_dims, expand_ratios, strides):
+        extra_blocks = []
 
         for i in range(len(expand_ratios)):
-            inp = hidden_dims[i - 1] if i > 0 else in_channels
-            extra_layers.append(InvertedResidual(inp, hidden_dims[i], strides[i], expand_ratios[i]))
+            input_dim = hidden_dims[i - 1] if i > 0 else in_channels
+            extra_blocks.append(InvertedResidual(input_dim, hidden_dims[i], strides[i], expand_ratios[i]))
 
-        self.extra_layers = nn.ModuleList(extra_layers)
-
-
-class Joiner(nn.Sequential):
-    def __init__(self, backbone, extra_layers):
-        super().__init__(backbone, extra_layers)
-
-    def forward(self, tensor_list: NestedTensor):
-        xs = self[0](tensor_list)
-        out: List[NestedTensor] = []
-        features = []
-        for name, x in xs.items():
-            out.append(x)
-            # extra layers
-            features.append(self[1](x).to(x.tensors.dtype))
-
-        return out, features
+        super().__init__(*extra_blocks)
 
 
 def build_backbone(args):
     train_backbone = args.lr_backbone > 0
-    backbone = BackboneWithMobileNet(train_backbone)
-    extra_layers = ExtraLayers(backbone.num_channels)
-    model = Joiner(backbone, extra_layers)
+    model = MobileNetWithExtraBlocks(train_backbone)
 
     return model

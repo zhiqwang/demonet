@@ -22,7 +22,7 @@ class SSDLiteWithMobileNetV2(GeneralizedSSD):
         max_sizes=[105, 150, 195, 240, 285, 330],
         clip=True,
         # Multi Box parameter
-        hidden_dims=[576, 1280, 512, 256, 256, 64],
+        hidden_dims=[96, 1280, 512, 256, 256, 64],
         num_anchors=[6, 6, 6, 6, 6, 6],  # number of boxes per feature map location
         num_classes=21,
         # SSD Box parameter
@@ -51,12 +51,6 @@ model_urls = {'ssd_lite_mobilenet_v2': ''}
 
 
 def build(args):
-    if args.image_size != 300:
-        raise NotImplementedError(
-            "You specified image_size [{}]. However, currently only "
-            "MobileNetV2SSD300 (image_size=300) is supported!".format(args.image_size),
-        )
-
     backbone = build_backbone(args)
 
     model = SSDLiteWithMobileNetV2(
