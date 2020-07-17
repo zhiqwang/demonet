@@ -12,7 +12,7 @@ from torchvision.models._utils import IntermediateLayerGetter
 
 from typing import List
 
-from util.misc import NestedTensor, is_main_process
+from util.misc import NestedTensor
 
 
 class FrozenBatchNorm2d(nn.Module):
@@ -64,7 +64,7 @@ class BackboneBase(nn.Module):
     ):
         super().__init__()
         for name, parameter in backbone.named_parameters():
-            if not train_backbone or "features" not in name:
+            if not train_backbone:
                 parameter.requires_grad_(False)
 
         self.body = IntermediateLayerGetter(backbone, return_layers=return_layers_backbone)
@@ -89,7 +89,7 @@ class MobileNetWithExtraBlocks(BackboneBase):
         self,
         train_backbone: bool,
     ):
-        backbone = mobilenet_v2(pretrained=is_main_process(),
+        backbone = mobilenet_v2(pretrained=True,
                                 norm_layer=FrozenBatchNorm2d).features
         return_layers_backbone = {"13": "0", "18": "1"}
 
