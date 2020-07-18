@@ -5,21 +5,11 @@ import torch
 from torch import nn, Tensor
 import torch.nn.functional as F
 
-import torchvision
-from torchvision.ops.boxes import box_iou, batched_nms
+from torchvision.ops.boxes import box_iou
 
 from . import _utils as det_utils
 
 from torch.jit.annotations import List, Optional, Dict, Tuple
-
-
-@torch.jit.unused
-def _onnx_get_num_priors(ob):
-    # type: (Tensor, int) -> int
-    from torch.onnx import operators
-    num_anchors = operators.shape_as_tensor(ob)[0].unsqueeze(0)
-
-    return num_anchors
 
 
 class SeperableConv2d(nn.Sequential):
@@ -95,13 +85,15 @@ class MultiBoxLiteHead(nn.Module):
         return out
 
     def forward(self, features):
-        # type: (List[Tensor]) -> Tuple[List[Tensor], List[Tensor]]
+        # type: (List[Tensor]) -> Tuple[Tensor, Tensor]
         logits = []
         bbox_reg = []
 
         for i in range(len(features)):
             logits.append(self.get_result_from_cls_logits(features[i], i))
             bbox_reg.append(self.get_result_from_bbox_pred(features[i], i))
+
+        logits, bbox_reg = concat_box_prediction_layers(logits, bbox_reg)
 
         return logits, bbox_reg
 
@@ -188,38 +180,24 @@ class SSDBoxHeads(nn.Module):
 
     def forward(
         self,
-        features,  # type: List[Tensor]
-        targets=None,  # type: Optional[List[Dict[str, Tensor]]]
+        priors,  # type: Tensor
+        class_logits,  # type: Tensor
+        box_regression,  # type: Tensor
+        targets,  # type: List[Dict[str, Tensor]]
     ):
-        # type: (...) -> Tuple[List[Dict[str, Tensor]], Dict[str, Tensor]]
-        priors = self.prior_generator(features)  # BoxMode: XYWHA_REL
-        class_logits, box_regression = self.multibox_head(features)
-
-        class_logits, box_regression = concat_box_prediction_layers(class_logits, box_regression)
-
-        result = torch.jit.annotate(List[Dict[str, torch.Tensor]], [])
+        # type: (...) -> Tuple[Dict[str, Tensor]]
         losses = {}
-        if self.training:
-            regression_targets, labels = self.select_training_samples(priors, targets)
-            loss_classifier, loss_box_reg = self.compute_loss(
-                box_regression, class_logits, regression_targets, labels)
 
-            losses = {
-                'loss_box_reg': loss_box_reg,
-                'loss_classifier': loss_classifier,
-            }
-        else:
-            boxes, scores, labels = self.postprocess_detections(class_logits, box_regression, priors)
-            num_images = len(boxes)
-            for i in range(num_images):
-                result.append(
-                    {
-                        "boxes": boxes[i],
-                        "labels": labels[i],
-                        "scores": scores[i],
-                    }
-                )
-        return result, losses
+        regression_targets, labels = self.select_training_samples(priors, targets)
+        loss_classifier, loss_box_reg = self.compute_loss(
+            box_regression, class_logits, regression_targets, labels)
+
+        losses = {
+            'loss_box_reg': loss_box_reg,
+            'loss_classifier': loss_classifier,
+        }
+
+        return losses
 
     def assign_targets_to_priors(self, gt_boxes, gt_labels, priors):
         # type: (List[Tensor], List[Tensor], Tensor) -> Tuple[List[Tensor], List[Tensor]]
@@ -284,76 +262,6 @@ class SSDBoxHeads(nn.Module):
         labels = torch.stack(labels, 0)
 
         return regression_targets, labels
-
-    def _get_num_priors(self, priors):
-        # type: (Tensor) -> Tensor
-        if torchvision._is_tracing():
-            num_anchors = _onnx_get_num_priors(priors)
-        else:
-            num_anchors = priors.shape[0]
-        return num_anchors
-
-    def postprocess_detections(self, class_logits, box_regression, priors):
-        # type: (Tensor, Tensor, Tensor) -> Tuple[List[Tensor], List[Tensor], List[Tensor]]
-        """
-        At test time, postprocess_detections is the final layer of SSD. Decode location preds,
-        apply non-maximum suppression to location predictions based on conf
-        scores and threshold to a detections_per_img number of output predictions
-        for both confidence score and locations.
-
-        Args:
-            class_logits (Tensor): [batch_size, num_priors, num_classes] class predictions.
-            box_regression (Tensor): [batch_size, num_priors, 4] predicted locations.
-            priors (Tensor): [num_priors, 4] real boxes corresponding all the priors.
-        """
-        device = class_logits.device
-        num_classes = class_logits.shape[-1]
-        num_priors = self._get_num_priors(priors)
-
-        pred_boxes = self.box_coder.decode(box_regression, priors)  # batch_size x num_priors x 4
-        pred_scores = F.softmax(class_logits, -1)
-
-        all_boxes = []
-        all_scores = []
-        all_labels = []
-        for boxes, scores in zip(pred_boxes, pred_scores):
-            # For each class, perform nms
-            boxes = boxes.reshape(num_priors, 1, 4)
-            boxes = boxes.expand(num_priors, num_classes, 4)
-
-            # create labels for each prediction
-            labels = torch.arange(num_classes, device=device)
-            labels = labels.view(1, -1).expand_as(scores)
-
-            # remove predictions with the background label
-            boxes = boxes[:, 1:]
-            scores = scores[:, 1:]
-            labels = labels[:, 1:]
-
-            # batch everything, by making every class prediction be a separate instance
-            boxes = boxes.reshape(-1, 4)
-            scores = scores.reshape(-1)
-            labels = labels.reshape(-1)
-
-            # remove low scoring boxes
-            inds = torch.nonzero(scores > self.score_thresh).squeeze(1)
-            boxes, scores, labels = boxes[inds], scores[inds], labels[inds]
-
-            # remove empty boxes
-            keep = det_utils.remove_small_boxes(boxes, min_size=1e-2)
-            boxes, scores, labels = boxes[keep], scores[keep], labels[keep]
-
-            # non-maximum suppression, independently done per level
-            keep = batched_nms(boxes, scores, labels, self.nms_thresh)
-            # keep only topk scoring predictions
-            keep = keep[:self.detections_per_img]
-            boxes, scores, labels = boxes[keep], scores[keep], labels[keep]
-
-            all_boxes.append(boxes)
-            all_scores.append(scores)
-            all_labels.append(labels)
-
-        return all_boxes, all_scores, all_labels
 
     def compute_loss(self, box_regression, class_logits, regression_targets, labels):
         """Implement SSD MultiBox Loss. Basically, MultiBox loss combines

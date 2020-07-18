@@ -87,7 +87,7 @@ class ONNXExporterTester(unittest.TestCase):
         image = Image.open(BytesIO(data.content)).convert("RGB")
 
         if size is None:
-            size = (300, 300)
+            size = (320, 320)
         image = image.resize(size, Image.BILINEAR)
 
         to_tensor = transforms.ToTensor()
@@ -95,10 +95,10 @@ class ONNXExporterTester(unittest.TestCase):
 
     def get_test_images(self):
         image_url = "http://farm3.staticflickr.com/2469/3915380994_2e611b1779_z.jpg"
-        image = self.get_image_from_url(url=image_url, size=(300, 300))
+        image = self.get_image_from_url(url=image_url, size=(320, 320))
 
         image_url2 = "https://pytorch.org/tutorials/_static/img/tv_tutorial/tv_image05.png"
-        image2 = self.get_image_from_url(url=image_url2, size=(300, 300))
+        image2 = self.get_image_from_url(url=image_url2, size=(320, 320))
 
         images = nested_tensor_from_tensor_list([image])
         test_images = nested_tensor_from_tensor_list([image2])
@@ -106,12 +106,11 @@ class ONNXExporterTester(unittest.TestCase):
 
     def test_ssd_lite_mobilenet_v2(self):
         images, test_images = self.get_test_images()
-        x = nested_tensor_from_tensor_list([torch.rand(3, 300, 300), torch.rand(3, 300, 300)])
+        x = nested_tensor_from_tensor_list([torch.rand(3, 320, 320), torch.rand(3, 320, 320)])
         model = ssd_lite_mobilenet_v2(
             pretrained=False,
+            image_size=320,
             num_classes=21,
-            image_size=300,
-            onnx_export=True,
         )
         model.eval()
         model(images)

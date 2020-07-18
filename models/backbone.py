@@ -51,7 +51,7 @@ class MobileNetWithExtraBlocks(BackboneBase):
         self,
         train_backbone: bool,
     ):
-        backbone = mobilenet_v2(pretrained=True, norm_layer=None).features
+        backbone = mobilenet_v2(pretrained=True).features
         return_layers_backbone = {"13": "0", "18": "1"}
 
         num_channels = 1280

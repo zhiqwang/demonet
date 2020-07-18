@@ -2,21 +2,15 @@ import unittest
 
 import torch
 
-from models import _utils as det_utils
-
 from models.backbone import MobileNetWithExtraBlocks
 from models.prior_box import AnchorGenerator
-from models.box_head import MultiBoxLiteHead, SSDBoxHeads
+from models.box_head import MultiBoxLiteHead
+from models.generalized_ssd import GeneralizedSSD
 
 from hubconf import ssd_lite_mobilenet_v2
 
 
 class ModelTester(unittest.TestCase):
-
-    def test_box_cxcywh_to_xyxy(self):
-        t = torch.rand(10, 4)
-        r = det_utils.xyxy_to_xywha(det_utils.xywha_to_xyxy(t))
-        self.assertLess((t - r).abs().max(), 1e-5)
 
     def test_mobilenet_with_extra_blocks_script(self):
 
@@ -47,26 +41,12 @@ class ModelTester(unittest.TestCase):
         model = self._init_test_multibox_head()
         torch.jit.script(model)
 
-    def _init_test_ssd_box_heads(self):
-        variances = [0.1, 0.2]
-        iou_thresh = 0.5
-        negative_positive_ratio = 3
-        score_thresh = 0.5
-        nms_thresh = 0.45
-        post_nms_top_n = 100
-
+    def test_ssd_script(self):
+        backbone_with_extra_blocks = MobileNetWithExtraBlocks(train_backbone=True)
         prior_generator = self._init_test_prior_generator()
         multibox_head = self._init_test_multibox_head()
 
-        box_head = SSDBoxHeads(
-            prior_generator, multibox_head,
-            variances, iou_thresh, negative_positive_ratio,
-            score_thresh, nms_thresh, post_nms_top_n,
-        )
-        return box_head
-
-    def _test_ssd_box_heads_script(self):
-        model = self._init_test_ssd_box_heads()
+        model = GeneralizedSSD(backbone_with_extra_blocks, prior_generator, multibox_head)
         torch.jit.script(model)
 
     def _test_ssd_lite_mobilet_v2_script(self):

@@ -5,6 +5,8 @@ from torch import Tensor
 
 from torch.jit.annotations import Tuple
 
+from util.box_ops import box_cxcywh_to_xyxy, box_xyxy_to_cxcywh
+
 
 class BalancedPositiveNegativeSampler(object):
     """
@@ -21,6 +23,7 @@ class BalancedPositiveNegativeSampler(object):
         self.negative_positive_ratio = negative_positive_ratio
 
     def __call__(self, loss, targets):
+        # type: (Tensor, Tensor)
         """
         It used to suppress the presence of a large number of negative prediction.
         It works on image level not batch level.
@@ -43,7 +46,6 @@ class BalancedPositiveNegativeSampler(object):
         return pos_mask | neg_mask
 
 
-@torch.jit._script_if_tracing
 def boxes_to_locations(boxes, priors, variances):
     # type: (Tensor, Tensor, Tuple[float, float]) -> Tensor
     r"""Convert boxes into regressional location results of SSD
@@ -62,7 +64,6 @@ def boxes_to_locations(boxes, priors, variances):
     ], dim=boxes.dim() - 1)
 
 
-@torch.jit._script_if_tracing
 def locations_to_boxes(locations, priors, variances):
     # type: (Tensor, Tensor, Tuple[float, float]) -> Tensor
     r"""Convert regressional location results of SSD into boxes in XYWHA_REL BoxMode
@@ -114,7 +115,7 @@ class BoxCoder(object):
         Return:
             encoded boxes (tensor) [num_priors, 4]
         """
-        boxes = xyxy_to_xywha(boxes)
+        boxes = box_xyxy_to_cxcywh(boxes)
         locations = boxes_to_locations(boxes, priors, self.variances)
         return locations
 
@@ -130,35 +131,8 @@ class BoxCoder(object):
         """
 
         boxes = locations_to_boxes(locations, priors, self.variances)
-        boxes = xywha_to_xyxy(boxes)
+        boxes = box_cxcywh_to_xyxy(boxes)
         return boxes
-
-
-def xywha_to_xyxy(boxes):
-    """ Convert BoxMode of boxes from XYWHA_REL to XYXY_REL.
-    Args:
-        boxes (Tensor): XYWHA_REL BoxMode
-            default BoxMode from priorbox generator layers.
-    Return:
-        boxes (Tensor): XYXY_REL BoxMode
-    """
-    x_c, y_c, w, h = boxes.unbind(-1)
-    b = [(x_c - 0.5 * w), (y_c - 0.5 * h),
-         (x_c + 0.5 * w), (y_c + 0.5 * h)]
-    return torch.stack(b, dim=-1)
-
-
-def xyxy_to_xywha(boxes):
-    """ Convert BoxMode of boxes from XYXY_REL to XYWHA_REL.
-    Args:
-        boxes (Tensor): XYXY_REL BoxMode
-    Return:
-        boxes (Tensor): XYWHA_REL BoxMode
-    """
-    x0, y0, x1, y1 = boxes.unbind(-1)
-    b = [(x0 + x1) / 2, (y0 + y1) / 2,
-         (x1 - x0), (y1 - y0)]
-    return torch.stack(b, dim=-1)
 
 
 def remove_small_boxes(boxes, min_size):
