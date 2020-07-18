@@ -33,7 +33,7 @@ That's it, should be good to train and evaluate detection models.
 
 ## Pretrained Models 🤗
 
-We provide [`ssd_lite_mobilenet_v2`](models/ssd_mobilenet.py) pretrained model [weights](https://drive.google.com/file/d/11isfA_F3QUzsWVzflrY2MXJYqwNt2xCV/view?usp=sharing), with map 68.39 on VOC07 test subset (Training using VOC07+12 trainval subset).
+We provide [`ssd_lite_mobilenet_v2`](models/ssd_mobilenet.py) ~~pretrained model [weights](https://drive.google.com/file/d/11isfA_F3QUzsWVzflrY2MXJYqwNt2xCV/view?usp=sharing)~~ (For the SSD network structure is frequently updated now, the provided model can't be loaded, contact me for the lastest model via [email](mailto:zhiqwang@outlook.com)), with map 68.39 on VOC07 test subset (Training using VOC07+12 trainval subset).
 
 ```
 AP for aeroplane = 0.6822
@@ -138,4 +138,4 @@ CUDA_VISIBLE_DEVICES=[GPU_ID] python -m train \
 ## Acknowledgement 🎓
 
 - This repo borrows the architecture design and part of the code from [DETR](https://github.com/facebookresearch/detr) and [torchvision](https://github.com/pytorch/vision/tree/master/torchvision/models/detection).
-- The implementation of `ssd_lite_mobilenet_v2` borrow the code from [pytorch-ssd](https://github.com/qfgaohao/pytorch-ssd).
+- The implementation of `ssd_lite_mobilenet_v2` borrow the code from [qfgaohao's pytorch-ssd](https://github.com/qfgaohao/pytorch-ssd) and [lufficc's SSD](http://github.com/lufficc/SSD/).
