@@ -1,9 +1,9 @@
 # Copyright (c) 2020, Zhiqiang Wang. All Rights Reserved.
 
-from .generalized_ssd import GeneralizedSSD
 from .backbone import build_backbone
 from .prior_box import AnchorGenerator
 from .box_head import MultiBoxLiteHead
+from .generalized_ssd import GeneralizedSSD, PostProcess
 
 
 class SSDLiteWithMobileNetV2(GeneralizedSSD):
@@ -25,22 +25,11 @@ class SSDLiteWithMobileNetV2(GeneralizedSSD):
         hidden_dims=[96, 1280, 512, 256, 256, 64],
         num_anchors=[6, 6, 6, 6, 6, 6],  # number of boxes per feature map location
         num_classes=21,
-        # SSD Box parameter
-        variances=[0.1, 0.2],
-        iou_thresh=0.5,
-        negative_positive_ratio=3,
-        score_thresh=0.5,
-        nms_thresh=0.45,
-        post_nms_top_n=100,
     ):
-
         prior_generator = AnchorGenerator(image_size, aspect_ratios, min_sizes, max_sizes, clip)
         multibox_head = MultiBoxLiteHead(hidden_dims, num_anchors, num_classes)
 
         super().__init__(backbone, prior_generator, multibox_head)
-
-
-model_urls = {'ssd_lite_mobilenet_v2': ''}
 
 
 def build(args):
@@ -49,8 +38,9 @@ def build(args):
     model = SSDLiteWithMobileNetV2(
         backbone,
         image_size=args.image_size,
-        score_thresh=args.score_thresh,
         num_classes=args.num_classes,
     )
 
-    return model
+    postprocessors = PostProcess(score_thresh=args.score_thresh)
+
+    return model, postprocessors

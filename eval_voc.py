@@ -35,7 +35,7 @@ def main(args):
     )
 
     print("Creating model")
-    model = build_model(args)
+    model, postprocessors = build_model(args)
     model.to(device)
 
     # load model weights
@@ -44,11 +44,11 @@ def main(args):
 
     output_dir = Path(args.output_dir)
     # evaluation
-    evaluate(model, data_loader, device, output_dir)
+    evaluate(model, postprocessors, data_loader, device, output_dir)
 
 
 @torch.no_grad()
-def evaluate(model, data_loader, device, output_dir):
+def evaluate(model, postprocessors, data_loader, device, output_dir):
     model.eval()
     metric_logger = MetricLogger(delimiter="  ")
     header = 'Test:'
@@ -63,21 +63,18 @@ def evaluate(model, data_loader, device, output_dir):
 
         model_time = time.time()
         outputs = model(samples)
+        target_sizes = torch.stack([t['orig_size'] for t in targets], dim=0).to(device)
+        results = postprocessors(outputs, target_sizes)
 
         model_time = time.time() - model_time
 
-        for target, output in zip(targets, outputs):
+        for target, result in zip(targets, results):
             image_index.append(''.join([chr(i) for i in target['filename'].tolist()]))
 
-            orig_target_sizes = target['orig_size'].cpu().numpy()
-            orig_target_sizes = np.tile(orig_target_sizes[1::-1], 2)
-
-            # Convert the output of models to numpy
-            boxes = output['boxes'].tolist()
-            labels = output['labels'].tolist()
-            scores = output['scores'].tolist()
-
-            boxes = [(box * orig_target_sizes) for box in boxes]
+            # Convert the result of models to numpy
+            boxes = result['boxes'].tolist()
+            labels = result['labels'].tolist()
+            scores = result['scores'].tolist()
 
             image_boxes = [[] for i in range(len(cls_names))]
             for i, box in enumerate(boxes):

@@ -5,16 +5,20 @@ import torch
 from models.backbone import MobileNetWithExtraBlocks
 from models.prior_box import AnchorGenerator
 from models.box_head import MultiBoxLiteHead
-from models.generalized_ssd import GeneralizedSSD
+from models.generalized_ssd import GeneralizedSSD, PostProcess
 
 from hubconf import ssd_lite_mobilenet_v2
 
 
 class ModelTester(unittest.TestCase):
 
+    def _init_test_backbone(self):
+        backbone = MobileNetWithExtraBlocks(train_backbone=False)
+        return backbone
+
     def test_mobilenet_with_extra_blocks_script(self):
 
-        model = MobileNetWithExtraBlocks(train_backbone=False)
+        model = self._init_test_backbone()
         torch.jit.script(model)
 
     def _init_test_prior_generator(self):
@@ -42,11 +46,19 @@ class ModelTester(unittest.TestCase):
         torch.jit.script(model)
 
     def test_ssd_script(self):
-        backbone_with_extra_blocks = MobileNetWithExtraBlocks(train_backbone=True)
+        backbone_with_extra_blocks = self._init_test_backbone()
         prior_generator = self._init_test_prior_generator()
         multibox_head = self._init_test_multibox_head()
 
         model = GeneralizedSSD(backbone_with_extra_blocks, prior_generator, multibox_head)
+        torch.jit.script(model)
+
+    def _init_test_postprocessors(self):
+        postprocessors = PostProcess()
+        return postprocessors
+
+    def test_postprocessors_script(self):
+        model = self._init_test_postprocessors()
         torch.jit.script(model)
 
     def _test_ssd_lite_mobilet_v2_script(self):

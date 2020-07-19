@@ -131,8 +131,8 @@ def main(args):
     )
 
     print("Creating model")
-    model = build_model(args)
-    model.to(device)
+    model, postprocessors = build_model(args)
+    model, postprocessors = model.to(device), postprocessors.to(device)
 
     model_without_ddp = model
     if args.distributed:

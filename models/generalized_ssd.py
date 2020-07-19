@@ -69,8 +69,15 @@ def _onnx_get_num_priors(ob):
 
 class PostProcess(nn.Module):
     """ This module converts the model's output into the format expected by the coco api"""
-    def __init__(self, score_thresh, nms_thresh, detections_per_img):
+    def __init__(
+        self,
+        variances=(0.1, 0.2),
+        score_thresh=0.5,
+        nms_thresh=0.45,
+        detections_per_img=100,
+    ):
         super().__init__()
+        self.box_coder = det_utils.BoxCoder(variances)
         self.score_thresh = score_thresh
         self.nms_thresh = nms_thresh
         self.detections_per_img = detections_per_img
@@ -109,10 +116,8 @@ class PostProcess(nn.Module):
         pred_boxes = self.box_coder.decode(out_bbox, priors)  # batch_size x num_priors x 4
         prob = F.softmax(out_logits, -1)
 
-        all_boxes = []
-        all_scores = []
-        all_labels = []
-        for boxes, scores in zip(pred_boxes, prob):
+        results = []
+        for boxes, scores, target_size in zip(pred_boxes, prob, target_sizes):
             # For each class, perform nms
             boxes = boxes.reshape(num_priors, 1, 4)
             boxes = boxes.expand(num_priors, num_classes, 4)
@@ -145,8 +150,8 @@ class PostProcess(nn.Module):
             keep = keep[:self.detections_per_img]
             boxes, scores, labels = boxes[keep], scores[keep], labels[keep]
 
-            all_boxes.append(boxes)
-            all_scores.append(scores)
-            all_labels.append(labels)
+            # boxes = boxes * target_size.flip(0).repeat(2)
 
-        return all_boxes, all_scores, all_labels
+            results.append({'scores': scores, 'labels': labels, 'boxes': boxes})
+
+        return results

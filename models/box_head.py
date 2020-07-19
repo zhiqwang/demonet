@@ -185,7 +185,7 @@ class SSDBoxHeads(nn.Module):
         box_regression,  # type: Tensor
         targets,  # type: List[Dict[str, Tensor]]
     ):
-        # type: (...) -> Tuple[Dict[str, Tensor]]
+        # type: (...) -> Dict[str, Tensor]
         losses = {}
 
         regression_targets, labels = self.select_training_samples(priors, targets)

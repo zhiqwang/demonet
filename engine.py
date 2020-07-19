@@ -1,7 +1,7 @@
 import sys
 import time
 import math
-import numpy as np
+
 import torch
 
 import torchvision.models
@@ -69,7 +69,7 @@ def _get_iou_types(model):
 
 
 @torch.no_grad()
-def evaluate(model, data_loader, base_ds, device):
+def evaluate(model, postprocessors, data_loader, base_ds, device):
     model.eval()
     metric_logger = utils.MetricLogger(delimiter="  ")
     header = 'Test:'
@@ -82,18 +82,12 @@ def evaluate(model, data_loader, base_ds, device):
 
         model_time = time.time()
         outputs = model(samples)
+        target_sizes = torch.stack([t['orig_size'] for t in targets], dim=0).to(device)
+        results = postprocessors(outputs, target_sizes)
 
         model_time = time.time() - model_time
 
-        res = {}
-        for target, output in zip(targets, outputs):
-            # The output of models has converted to numpy
-            orig_target_sizes = target["orig_size"].cpu().numpy()
-            orig_target_sizes = np.tile(orig_target_sizes[1::-1], 2)
-
-            output["boxes"] = [(box * orig_target_sizes).astype("int64") for box in output["boxes"]]
-            res[target["image_id"].item()] = output
-
+        res = {target['image_id'].item(): output for target, output in zip(targets, results)}
         evaluator_time = time.time()
         coco_evaluator.update(res)
         evaluator_time = time.time() - evaluator_time
