@@ -40,7 +40,7 @@ def main(args):
 
     # load model weights
     checkpoint = torch.load(args.resume, map_location="cpu")
-    model.load_state_dict(checkpoint['model'])
+    model.load_state_dict(checkpoint)
 
     output_dir = Path(args.output_dir)
     # evaluation

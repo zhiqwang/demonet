@@ -150,7 +150,7 @@ class PostProcess(nn.Module):
             keep = keep[:self.detections_per_img]
             boxes, scores, labels = boxes[keep], scores[keep], labels[keep]
 
-            # boxes = boxes * target_size.flip(0).repeat(2)
+            boxes = boxes * target_size.flip(0).repeat(2)
 
             results.append({'scores': scores, 'labels': labels, 'boxes': boxes})
 

@@ -138,7 +138,7 @@ def concat_box_prediction_layers(box_cls, box_regression):
     return box_cls, box_regression
 
 
-class SSDBoxHeads(nn.Module):
+class SetCriterion(nn.Module):
     """
     Implements MultiBox based SSD Heads.
     Arguments:

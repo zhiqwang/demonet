@@ -35,7 +35,7 @@ def ssd_lite_mobilenet_v2(
     model = _make_mobilenet_v2(image_size=image_size)
     if pretrained:
         checkpoint = torch.load(model_urls['ssd_lite_mobilenet_v2'], map_location="cpu")
-        model.load_state_dict(checkpoint['model'])
+        model.load_state_dict(checkpoint)
     if return_postprocessor:
         postprocessor = PostProcess(score_thresh=score_thresh)
         return model, postprocessor
