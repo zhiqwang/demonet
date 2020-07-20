@@ -104,7 +104,7 @@ class ONNXExporterTester(unittest.TestCase):
         test_images = nested_tensor_from_tensor_list([image2])
         return images, test_images
 
-    def test_ssd_lite_mobilenet_v2(self):
+    def _test_ssd_lite_mobilenet_v2(self):
         images, test_images = self.get_test_images()
         x = nested_tensor_from_tensor_list([torch.rand(3, 320, 320), torch.rand(3, 320, 320)])
         model = ssd_lite_mobilenet_v2(

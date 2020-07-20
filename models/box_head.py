@@ -15,7 +15,7 @@ from torch.jit.annotations import List, Optional, Dict, Tuple
 
 @torch.jit.unused
 def _onnx_get_num_priors(ob):
-    # type: (Tensor, int) -> int
+    # type: (Tensor) -> int
     from torch.onnx import operators
     num_anchors = operators.shape_as_tensor(ob)[0].unsqueeze(0)
 
@@ -328,15 +328,14 @@ class PostProcess(nn.Module):
         self.detections_per_img = detections_per_img
 
     def _get_num_priors(self, priors):
-        # type: (Tensor) -> Tensor
+        # type: (Tensor) -> int
         if torchvision._is_tracing():
             num_anchors = _onnx_get_num_priors(priors)
         else:
             num_anchors = priors.shape[0]
         return num_anchors
 
-    @torch.no_grad()
-    def forward(self, pred_logits, pred_boxes, priors, target_sizes):
+    def forward(self, pred_logits: Tensor, pred_boxes: Tensor, priors: Tensor, target_sizes: Tensor):
         """ Perform the computation. At test time, postprocess_detections is the final layer of SSD.
         Decode location preds, apply non-maximum suppression to location predictions based on conf
         scores and threshold to a detections_per_img number of output predictions
@@ -355,10 +354,10 @@ class PostProcess(nn.Module):
         num_priors = self._get_num_priors(priors)
 
         out_boxes = self.box_coder.decode(pred_boxes, priors)  # batch_size x num_priors x 4
-        prob = F.softmax(pred_logits, -1)
+        out_scores = F.softmax(pred_logits, -1)
 
-        results = []
-        for boxes, scores, target_size in zip(out_boxes, prob, target_sizes):
+        results = torch.jit.annotate(List[Dict[str, torch.Tensor]], [])
+        for boxes, scores, target_size in zip(out_boxes, out_scores, target_sizes):
             # For each class, perform nms
             boxes = boxes.reshape(num_priors, 1, 4)
             boxes = boxes.expand(num_priors, num_classes, 4)

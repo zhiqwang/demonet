@@ -8,8 +8,6 @@ from torch import nn, Tensor
 
 from util.misc import NestedTensor, nested_tensor_from_tensor_list
 
-from torch.jit.annotations import Dict
-
 
 class GeneralizedSSD(nn.Module):
     """
@@ -28,8 +26,7 @@ class GeneralizedSSD(nn.Module):
         self.multibox_head = multibox_head
         self.post_process = post_process
 
-    def forward(self, samples, target_sizes):
-        # type: (NestedTensor, Tensor) -> Dict[str, Tensor]
+    def forward(self, samples: NestedTensor, target_sizes: Tensor):
         """
         Arguments:
             samples (NestedTensor): Expects a NestedTensor, which consists of:

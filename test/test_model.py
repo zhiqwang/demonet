@@ -7,7 +7,7 @@ from models.prior_box import AnchorGenerator
 from models.box_head import MultiBoxLiteHead, PostProcess
 from models.generalized_ssd import GeneralizedSSD
 
-from hubconf import ssd_lite_mobilenet_v2
+from util.misc import nested_tensor_from_tensor_list
 
 
 class ModelTester(unittest.TestCase):
@@ -32,7 +32,7 @@ class ModelTester(unittest.TestCase):
 
     def test_prior_generator_script(self):
         model = self._init_test_prior_generator()
-        torch.jit.script(model)
+        scripted_model = torch.jit.script(model)  # noqa
 
     def _init_test_multibox_head(self):
         hidden_dims = [96, 1280, 512, 256, 256, 64]
@@ -43,11 +43,15 @@ class ModelTester(unittest.TestCase):
 
     def test_multibox_head_script(self):
         model = self._init_test_multibox_head()
-        torch.jit.script(model)
+        scripted_model = torch.jit.script(model)  # noqa
 
     def _init_test_postprocessors(self):
         postprocessors = PostProcess()
         return postprocessors
+
+    def test_postprocessors_script(self):
+        model = self._init_test_postprocessors()
+        scripted_model = torch.jit.script(model)  # noqa
 
     def test_ssd_script(self):
         backbone_with_extra_blocks = self._init_test_backbone()
@@ -56,15 +60,15 @@ class ModelTester(unittest.TestCase):
         post_process = self._init_test_postprocessors()
 
         model = GeneralizedSSD(backbone_with_extra_blocks, prior_generator, multibox_head, post_process)
-        torch.jit.script(model)
+        scripted_model = torch.jit.script(model)
 
-    def _test_postprocessors_script(self):
-        model = self._init_test_postprocessors()
-        torch.jit.script(model)
-
-    def _test_ssd_lite_mobilet_v2_script(self):
-        model = ssd_lite_mobilenet_v2()
-        torch.jit.script(model)
+        x = nested_tensor_from_tensor_list([torch.rand(3, 320, 320), torch.rand(3, 320, 320)])
+        target_sizes = torch.Tensor([[320, 320], [320, 320]])
+        out = model(x, target_sizes)
+        out_script = scripted_model(x, target_sizes)
+        self.assertTrue(out[0]["scores"].equal(out_script[0]["scores"]))
+        self.assertTrue(out[0]["labels"].equal(out_script[0]["labels"]))
+        self.assertTrue(out[0]["boxes"].equal(out_script[0]["boxes"]))
 
 
 if __name__ == "__main__":
