@@ -69,7 +69,7 @@ def _get_iou_types(model):
 
 
 @torch.no_grad()
-def evaluate(model, postprocessors, data_loader, base_ds, device):
+def evaluate(model, data_loader, base_ds, device):
     model.eval()
     metric_logger = utils.MetricLogger(delimiter="  ")
     header = 'Test:'
@@ -81,9 +81,8 @@ def evaluate(model, postprocessors, data_loader, base_ds, device):
         samples = samples.to(device)
 
         model_time = time.time()
-        outputs = model(samples)
         target_sizes = torch.stack([t['orig_size'] for t in targets], dim=0).to(device)
-        results = postprocessors(outputs, target_sizes)
+        results = model(samples, target_sizes)
 
         model_time = time.time() - model_time
 

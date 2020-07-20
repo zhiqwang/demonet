@@ -131,7 +131,7 @@ def main(args):
     )
 
     print("Creating model")
-    model, postprocessors = build_model(args)
+    model = build_model(args)
     model.to(device)
 
     model_without_ddp = model

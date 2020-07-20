@@ -35,7 +35,7 @@ def main(args):
     )
 
     print("Creating model")
-    model, postprocessors = build_model(args)
+    model = build_model(args)
     model.to(device)
 
     # load model weights
@@ -44,11 +44,11 @@ def main(args):
 
     output_dir = Path(args.output_dir)
     # evaluation
-    evaluate(model, postprocessors, data_loader, device, output_dir)
+    evaluate(model, data_loader, device, output_dir)
 
 
 @torch.no_grad()
-def evaluate(model, postprocessors, data_loader, device, output_dir):
+def evaluate(model, data_loader, device, output_dir):
     model.eval()
     metric_logger = MetricLogger(delimiter="  ")
     header = 'Test:'
@@ -62,9 +62,8 @@ def evaluate(model, postprocessors, data_loader, device, output_dir):
         samples = samples.to(device)
 
         model_time = time.time()
-        outputs = model(samples)
         target_sizes = torch.stack([t['orig_size'] for t in targets], dim=0).to(device)
-        results = postprocessors(outputs, target_sizes)
+        results = model(samples, target_sizes)
 
         model_time = time.time() - model_time
 

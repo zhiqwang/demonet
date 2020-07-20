@@ -2,8 +2,8 @@
 
 from .backbone import build_backbone
 from .prior_box import AnchorGenerator
-from .box_head import MultiBoxLiteHead
-from .generalized_ssd import GeneralizedSSD, PostProcess
+from .box_head import MultiBoxLiteHead, PostProcess
+from .generalized_ssd import GeneralizedSSD
 
 
 class SSDLiteWithMobileNetV2(GeneralizedSSD):
@@ -25,11 +25,14 @@ class SSDLiteWithMobileNetV2(GeneralizedSSD):
         hidden_dims=[96, 1280, 512, 256, 256, 64],
         num_anchors=[6, 6, 6, 6, 6, 6],  # number of boxes per feature map location
         num_classes=21,
+        # Box post process
+        score_thresh=0.5,
     ):
         prior_generator = AnchorGenerator(image_size, aspect_ratios, min_sizes, max_sizes, clip)
         multibox_head = MultiBoxLiteHead(hidden_dims, num_anchors, num_classes)
+        post_process = PostProcess(score_thresh=score_thresh)
 
-        super().__init__(backbone, prior_generator, multibox_head)
+        super().__init__(backbone, prior_generator, multibox_head, post_process)
 
 
 def build(args):
@@ -39,8 +42,7 @@ def build(args):
         backbone,
         image_size=args.image_size,
         num_classes=args.num_classes,
+        score_thresh=args.score_thresh,
     )
 
-    postprocessors = PostProcess(score_thresh=args.score_thresh)
-
-    return model, postprocessors
+    return model
