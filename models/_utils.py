@@ -13,8 +13,7 @@ class BalancedPositiveNegativeSampler(object):
     This class samples batches, ensuring that they contain a fixed proportion of positives
     """
 
-    def __init__(self, negative_positive_ratio):
-        # type: (int) -> None
+    def __init__(self, negative_positive_ratio: int):
         """
         Arguments:
             negative_positive_ratio (int): the ratio between the negative examples and
@@ -22,8 +21,7 @@ class BalancedPositiveNegativeSampler(object):
         """
         self.negative_positive_ratio = negative_positive_ratio
 
-    def __call__(self, loss, targets):
-        # type: (Tensor, Tensor)
+    def __call__(self, loss: Tensor, targets: Tensor):
         """
         It used to suppress the presence of a large number of negative prediction.
         It works on image level not batch level.
@@ -46,8 +44,11 @@ class BalancedPositiveNegativeSampler(object):
         return pos_mask | neg_mask
 
 
-def boxes_to_locations(boxes, priors, variances):
-    # type: (Tensor, Tensor, Tuple[float, float]) -> Tensor
+def boxes_to_locations(
+    boxes: Tensor,
+    priors: Tensor,
+    variances: Tuple[float, float],
+) -> Tensor:
     r"""Convert boxes into regressional location results of SSD
     Args:
         boxes (Tensor): [num_targets, 4] in XYWHA_REL BoxMode
@@ -64,8 +65,11 @@ def boxes_to_locations(boxes, priors, variances):
     ], dim=boxes.dim() - 1)
 
 
-def locations_to_boxes(locations, priors, variances):
-    # type: (Tensor, Tensor, Tuple[float, float]) -> Tensor
+def locations_to_boxes(
+    locations: Tensor,
+    priors: Tensor,
+    variances: Tuple[float, float],
+) -> Tensor:
     r"""Convert regressional location results of SSD into boxes in XYWHA_REL BoxMode
     The conversion:
         $$predicted\_center \times variance_center =
@@ -97,16 +101,14 @@ class BoxCoder(object):
     the representation used for training the regressors.
     """
 
-    def __init__(self, variances):
-        # type: (Tuple[float, float]) -> None
+    def __init__(self, variances: Tuple[float, float]):
         """
         Arguments:
             variances (2-element tuple): variances of prior boxes
         """
         self.variances = variances
 
-    def encode(self, boxes, priors):
-        # type: (Tensor, Tensor) -> Tensor
+    def encode(self, boxes: Tensor, priors: Tensor) -> Tensor:
         """Encode the variances from the priorbox layers into the ground truth boxes
         we have boxes (based on jaccard overlap) with the prior boxes.
         Args:
@@ -119,8 +121,7 @@ class BoxCoder(object):
         locations = boxes_to_locations(boxes, priors, self.variances)
         return locations
 
-    def decode(self, locations, priors):
-        # type: (Tensor, Tensor) -> Tensor
+    def decode(self, locations: Tensor, priors: Tensor) -> Tensor:
         """Decode locations from predictions using priors to undo
         the encoding we did for offset regression at train time.
         Args:
@@ -135,8 +136,7 @@ class BoxCoder(object):
         return boxes
 
 
-def remove_small_boxes(boxes, min_size):
-    # type: (Tensor, float) -> Tensor
+def remove_small_boxes(boxes: Tensor, min_size: float) -> Tensor:
     """
     Remove boxes which contains at least one side smaller than min_size.
     Arguments:

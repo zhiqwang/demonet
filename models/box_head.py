@@ -10,12 +10,11 @@ from torchvision.ops.boxes import box_iou, batched_nms
 
 from . import _utils as det_utils
 
-from torch.jit.annotations import List, Optional, Dict, Tuple
+from torch.jit.annotations import List, Dict, Tuple
 
 
 @torch.jit.unused
-def _onnx_get_num_priors(ob):
-    # type: (Tensor) -> int
+def _onnx_get_num_priors(ob: Tensor) -> int:
     from torch.onnx import operators
     num_anchors = operators.shape_as_tensor(ob)[0].unsqueeze(0)
 
@@ -56,8 +55,7 @@ class MultiBoxLiteHead(nn.Module):
         self.cls_logits.append(nn.Conv2d(hidden_dims[-1], num_anchors[-1] * num_classes, 1))
         self.bbox_pred.append(nn.Conv2d(hidden_dims[-1], num_anchors[-1] * 4, 1))
 
-    def get_result_from_cls_logits(self, x, idx):
-        # type: (Tensor, int) -> Tensor
+    def get_result_from_cls_logits(self, x: Tensor, idx: int) -> Tensor:
         """
         This is equivalent to self.cls_logits[idx](x),
         but torchscript doesn't support this yet
@@ -75,8 +73,7 @@ class MultiBoxLiteHead(nn.Module):
             i += 1
         return out
 
-    def get_result_from_bbox_pred(self, x, idx):
-        # type: (Tensor, int) -> Tensor
+    def get_result_from_bbox_pred(self, x: Tensor, idx: int) -> Tensor:
         """
         This is equivalent to self.bbox_pred[idx](x),
         but torchscript doesn't support this yet
@@ -94,8 +91,7 @@ class MultiBoxLiteHead(nn.Module):
             i += 1
         return out
 
-    def forward(self, features):
-        # type: (List[Tensor]) -> Tuple[Tensor, Tensor]
+    def forward(self, features: List[Tensor]) -> Tuple[Tensor, Tensor]:
         logits = []
         bbox_reg = []
 
@@ -108,16 +104,18 @@ class MultiBoxLiteHead(nn.Module):
         return logits, bbox_reg
 
 
-def permute_and_flatten(layer, N, A, C, H, W):
-    # type: (Tensor, int, int, int, int, int) -> Tensor
+def permute_and_flatten(layer: Tensor, N: int, A: int, C: int, H: int, W: int) -> Tensor:
     layer = layer.view(N, -1, C, H, W)
     layer = layer.permute(0, 3, 4, 1, 2)
     layer = layer.reshape(N, -1, C)
     return layer
 
 
-def concat_box_prediction_layers(box_cls, box_regression):
-    # type: (List[Tensor], List[Tensor]) -> Tuple[Tensor, Tensor]
+def concat_box_prediction_layers(
+    box_cls: List[Tensor],
+    box_regression: List[Tensor],
+) -> Tuple[Tensor, Tensor]:
+
     box_cls_flattened = []
     box_regression_flattened = []
     # for each feature level, permute the outputs to make them be in the
@@ -188,14 +186,8 @@ class SetCriterion(nn.Module):
         self.nms_thresh = nms_thresh
         self.detections_per_img = detections_per_img
 
-    def forward(
-        self,
-        priors,  # type: Tensor
-        class_logits,  # type: Tensor
-        box_regression,  # type: Tensor
-        targets,  # type: List[Dict[str, Tensor]]
-    ):
-        # type: (...) -> Dict[str, Tensor]
+    def forward(self, priors: Tensor, class_logits: Tensor, box_regression: Tensor,
+                targets: List[Dict[str, Tensor]]) -> Dict[str, Tensor]:
         losses = {}
 
         regression_targets, labels = self.select_training_samples(priors, targets)
@@ -209,16 +201,20 @@ class SetCriterion(nn.Module):
 
         return losses
 
-    def assign_targets_to_priors(self, gt_boxes, gt_labels, priors):
-        # type: (List[Tensor], List[Tensor], Tensor) -> Tuple[List[Tensor], List[Tensor]]
+    def assign_targets_to_priors(
+        self,
+        gt_boxes: List[Tensor],
+        gt_labels: List[Tensor],
+        priors: Tensor,
+    ) -> Tuple[List[Tensor], List[Tensor]]:
         """Assign ground truth boxes and targets to priors.
         Args:
-            gt_boxes (List[Tensor]): [num_targets, 4]: ground truth boxes
-            gt_labels (List[Tensor]): [num_targets,]: labels of targets
-            priors (Tensor): [num_priors, 4]: XYXY_REL BoxMode
+            gt_boxes (List[Tensor]): with shape num_targets x 4, ground truth boxes
+            gt_labels (List[Tensor]): with shape num_targets, labels of targets
+            priors (Tensor): with shape num_priors x 4, XYXY_REL BoxMode
         Returns:
-            boxes (List[Tensor]): [num_priors, 4] real values for priors.
-            labels (List[Tensor]): [num_priros] labels for priors.
+            boxes (List[Tensor]): with shape num_priors x 4 real values for priors.
+            labels (List[Tensor]): with shape num_priros, labels for priors.
         """
         boxes = []
         labels = []
@@ -251,9 +247,12 @@ class SetCriterion(nn.Module):
             labels.append(labels_in_image)
         return boxes, labels
 
-    def select_training_samples(self, priors, targets):
-        # type: (Tensor, Optional[List[Dict[str, Tensor]]]) -> Tuple[Tensor, Tensor]
-        assert targets is not None
+    def select_training_samples(
+        self,
+        priors: Tensor,
+        targets: List[Dict[str, Tensor]],
+    ) -> Tuple[Tensor, Tensor]:
+
         dtype = priors.dtype
 
         gt_boxes = [t["boxes"].to(dtype) for t in targets]
@@ -327,8 +326,7 @@ class PostProcess(nn.Module):
         self.nms_thresh = nms_thresh
         self.detections_per_img = detections_per_img
 
-    def _get_num_priors(self, priors):
-        # type: (Tensor) -> int
+    def _get_num_priors(self, priors: Tensor) -> int:
         if torchvision._is_tracing():
             num_anchors = _onnx_get_num_priors(priors)
         else:
