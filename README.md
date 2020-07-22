@@ -1,12 +1,14 @@
-# De Monet - All of Object Detection
+# 👿 De Monet - All of Object Detection
 
-<p align="left">
-  <a href="https://github.com/vanillapi/demonet/actions?query=workflow%3A%22Setup+Python%22"><img alt="GitHub Actions status" src="https://github.com/vanillapi/demonet/workflows/Setup%20Python/badge.svg"></a>
-</p>
+![Test Python](https://github.com/vanillapi/demonet/workflows/Test%20Python/badge.svg)
 
 PyTorch training code and models reimplentation for object detection as described in [Liu et al. (2015), SSD: Single Shot MultiBox Detector](https://arxiv.org/abs/1512.02325). *Currently work in process, very pleasure for suggestion and cooperation.*
 
 ![Example of SSD Lite with mobilenet v2 backbone](.github/demo.png)
+
+## What's New 🆕
+
+- **July 22, 2020:** DEMONET have support for TorchScript.
 
 ## Usage 🛠
 
@@ -16,10 +18,10 @@ There are no extra compiled components in DEMONET and package dependencies are m
 git clone https://github.com/vanillapi/demonet.git
 ```
 
-Then, install PyTorch 1.5+ and torchvision 0.6+:
+Then, install PyTorch 1.7+ and torchvision 0.8+ (Preview Nightly version):
 
 ```
-conda install -c pytorch pytorch torchvision
+conda install pytorch torchvision cudatoolkit=10.2 -c pytorch-nightly
 ```
 
 Install pycocotools (for evaluation on COCO) and scipy (for training):

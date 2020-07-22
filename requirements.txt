@@ -1,8 +1,6 @@
 # pip install -U -r requirements.txt
 # pycocotools requires numpy 1.17 https://github.com/cocodataset/cocoapi/issues/356
 cython
-torch>=1.5.0
-torchvision>=0.6.0
 scipy
 onnx
 onnxruntime
