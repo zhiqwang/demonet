@@ -63,7 +63,7 @@ def evaluate(model, data_loader, device, output_dir):
 
         model_time = time.time()
         target_sizes = torch.stack([t['orig_size'] for t in targets], dim=0).to(device)
-        results = model(samples, target_sizes)
+        results = model(samples, target_sizes=target_sizes)
 
         model_time = time.time() - model_time
 
@@ -102,6 +102,8 @@ if __name__ == "__main__":
 
     parser.add_argument('--arch', default='ssd_lite_mobilenet_v2',
                         help='model architecture')
+    parser.add_argument('--return-criterion', action="store_true",
+                        help="Should be enabled in training mode")
     parser.add_argument('--data-path', default='./data-bin',
                         help='dataset')
     parser.add_argument('--dataset-file', default='voc',

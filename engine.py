@@ -11,7 +11,7 @@ from datasets.coco_eval import CocoEvaluator
 import util.misc as utils
 
 
-def train_one_epoch(model, optimizer, data_loader, device, epoch, print_freq):
+def train_one_epoch(model, criterion, optimizer, data_loader, device, epoch, print_freq):
     model.train()
     metric_logger = utils.MetricLogger(delimiter="  ")
     metric_logger.add_meter('lr', utils.SmoothedValue(window_size=1, fmt='{value:.6f}'))
@@ -28,7 +28,8 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch, print_freq):
         samples = samples.to(device)
         targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
 
-        loss_dict = model(samples, targets)
+        outputs = model(samples)
+        loss_dict = criterion(outputs, targets)
 
         losses = sum(loss for loss in loss_dict.values())
 
@@ -69,7 +70,7 @@ def _get_iou_types(model):
 
 
 @torch.no_grad()
-def evaluate(model, data_loader, base_ds, device):
+def evaluate(model, criterion, data_loader, base_ds, device):
     model.eval()
     metric_logger = utils.MetricLogger(delimiter="  ")
     header = 'Test:'
@@ -82,7 +83,7 @@ def evaluate(model, data_loader, base_ds, device):
 
         model_time = time.time()
         target_sizes = torch.stack([t['orig_size'] for t in targets], dim=0).to(device)
-        results = model(samples, target_sizes)
+        results = model(samples, target_sizes=target_sizes)
 
         model_time = time.time() - model_time
 

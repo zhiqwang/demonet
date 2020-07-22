@@ -10,7 +10,7 @@ from torchvision.ops.boxes import box_iou, batched_nms
 
 from . import _utils as det_utils
 
-from torch.jit.annotations import List, Dict, Tuple
+from torch.jit.annotations import List, Optional, Dict, Tuple
 
 
 @torch.jit.unused
@@ -147,52 +147,39 @@ def concat_box_prediction_layers(
 
 
 class SetCriterion(nn.Module):
-    """
-    Implements MultiBox based SSD Heads.
+    """This class computes the loss for SSD.
+
     Arguments:
-        prior_generator (AnchorGenerator): module that generates the anchors for a set of feature
-            maps.
-        multibox_head (nn.Module): module that computes the objectness and regression deltas
+        variances:
+        iou_thresh:
+        negative_positive_ratio:
     """
     __annotations__ = {
         'box_coder': det_utils.BoxCoder,
         'hard_negative_mining': det_utils.BalancedPositiveNegativeSampler,
     }
 
-    def __init__(
-        self,
-        prior_generator,
-        multibox_head,
-        variances,
-        iou_thresh,
-        negative_positive_ratio,
-        score_thresh,
-        nms_thresh,
-        detections_per_img,
-    ):
+    def __init__(self, variances, iou_thresh, negative_positive_ratio):
         super().__init__()
-        self.prior_generator = prior_generator
-        self.multibox_head = multibox_head
-        self.box_coder = det_utils.BoxCoder(tuple(variances))
+        self.box_coder = det_utils.BoxCoder(variances)
 
-        # used during training
         self.iou_thresh = iou_thresh
         self.hard_negative_mining = det_utils.BalancedPositiveNegativeSampler(
             negative_positive_ratio,
         )
 
-        # used during testing
-        self.score_thresh = score_thresh
-        self.nms_thresh = nms_thresh
-        self.detections_per_img = detections_per_img
-
-    def forward(self, priors: Tensor, class_logits: Tensor, box_regression: Tensor,
-                targets: List[Dict[str, Tensor]]) -> Dict[str, Tensor]:
+    def forward(self, outputs: Dict[str, Tensor], targets: List[Dict[str, Tensor]]) -> Dict[str, Tensor]:
+        """ This performs the loss computation.
+        Parameters:
+             outputs: dict of tensors, see the output specification of the model for the format
+             targets: list of dicts, such that len(targets) == batch_size.
+                      The expected keys in each dict depends on the losses applied, see each loss' doc
+        """
         losses = {}
 
-        regression_targets, labels = self.select_training_samples(priors, targets)
+        regression_targets, labels = self.select_training_samples(outputs['priors'], targets)
         loss_classifier, loss_box_reg = self.compute_loss(
-            box_regression, class_logits, regression_targets, labels)
+            outputs['pred_boxes'], outputs['pred_logits'], regression_targets, labels)
 
         losses = {
             'loss_box_reg': loss_box_reg,
@@ -258,7 +245,7 @@ class SetCriterion(nn.Module):
         gt_boxes = [t["boxes"].to(dtype) for t in targets]
         gt_labels = [t["labels"] for t in targets]
 
-        priors_xyxy = det_utils.xywha_to_xyxy(priors)
+        priors_xyxy = det_utils.box_cxcywh_to_xyxy(priors)
         # get boxes indices for each priors
         boxes, labels = self.assign_targets_to_priors(gt_boxes, gt_labels, priors_xyxy)
 
@@ -283,8 +270,8 @@ class SetCriterion(nn.Module):
         """
         num_classes = class_logits.shape[2]
         with torch.no_grad():
-            loss = - F.log_softmax(class_logits, dim=2)[:, :, 0]
-            mask = self.hard_negative_mining(loss, labels)
+            scores = - F.log_softmax(class_logits, dim=2)[:, :, 0]
+            mask = self.hard_negative_mining(scores, labels)
 
         class_logits = class_logits[mask, :]
 
@@ -315,10 +302,10 @@ class PostProcess(nn.Module):
     """ This module converts the model's output into the format expected by the coco api"""
     def __init__(
         self,
-        variances=(0.1, 0.2),
-        score_thresh=0.5,
-        nms_thresh=0.45,
-        detections_per_img=100,
+        variances: Tuple[float, float],
+        score_thresh: float,
+        nms_thresh: float,
+        detections_per_img: int,
     ):
         super().__init__()
         self.box_coder = det_utils.BoxCoder(variances)
@@ -333,7 +320,13 @@ class PostProcess(nn.Module):
             num_anchors = priors.shape[0]
         return num_anchors
 
-    def forward(self, pred_logits: Tensor, pred_boxes: Tensor, priors: Tensor, target_sizes: Tensor):
+    def forward(
+        self,
+        pred_logits: Tensor,
+        pred_boxes: Tensor,
+        priors: Tensor,
+        target_sizes: Optional[Tensor] = None,
+    ) -> List[Dict[str, Tensor]]:
         """ Perform the computation. At test time, postprocess_detections is the final layer of SSD.
         Decode location preds, apply non-maximum suppression to location predictions based on conf
         scores and threshold to a detections_per_img number of output predictions
@@ -351,10 +344,14 @@ class PostProcess(nn.Module):
         num_classes = pred_logits.shape[-1]
         num_priors = self._get_num_priors(priors)
 
+        if target_sizes is None:
+            batch_size = pred_logits.shape[0]
+            target_sizes = torch.ones((batch_size, 2), device=device)
+
         out_boxes = self.box_coder.decode(pred_boxes, priors)  # batch_size x num_priors x 4
         out_scores = F.softmax(pred_logits, -1)
 
-        results = torch.jit.annotate(List[Dict[str, torch.Tensor]], [])
+        results = torch.jit.annotate(List[Dict[str, Tensor]], [])
         for boxes, scores, target_size in zip(out_boxes, out_scores, target_sizes):
             # For each class, perform nms
             boxes = boxes.reshape(num_priors, 1, 4)

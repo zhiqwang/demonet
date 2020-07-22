@@ -1,8 +1,11 @@
 # Copyright (c) 2020, Zhiqiang Wang. All Rights Reserved.
+"""
+DEMONET model and criterion classes.
+"""
 
 from .backbone import build_backbone
 from .prior_box import AnchorGenerator
-from .box_head import MultiBoxLiteHead, PostProcess
+from .box_head import MultiBoxLiteHead, PostProcess, SetCriterion
 from .generalized_ssd import GeneralizedSSD
 
 
@@ -26,11 +29,14 @@ class SSDLiteWithMobileNetV2(GeneralizedSSD):
         num_anchors=[6, 6, 6, 6, 6, 6],  # number of boxes per feature map location
         num_classes=21,
         # Box post process
+        variances=(0.1, 0.2),
         score_thresh=0.5,
+        nms_thresh=0.45,
+        detections_per_img=100,
     ):
         prior_generator = AnchorGenerator(image_size, aspect_ratios, min_sizes, max_sizes, clip)
         multibox_head = MultiBoxLiteHead(hidden_dims, num_anchors, num_classes)
-        post_process = PostProcess(score_thresh=score_thresh)
+        post_process = PostProcess(variances, score_thresh, nms_thresh, detections_per_img)
 
         super().__init__(backbone, prior_generator, multibox_head, post_process)
 
@@ -44,5 +50,13 @@ def build(args):
         num_classes=args.num_classes,
         score_thresh=args.score_thresh,
     )
+
+    if args.return_criterion:
+        criterion = SetCriterion(
+            variances=(0.1, 0.2),
+            iou_thresh=0.5,
+            negative_positive_ratio=3,
+        )
+        return model, criterion
 
     return model

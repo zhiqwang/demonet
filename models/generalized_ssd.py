@@ -2,11 +2,14 @@
 """
 Implements the Generalized SSD framework
 """
+import warnings
 
 import torch
 from torch import nn, Tensor
 
 from util.misc import NestedTensor, nested_tensor_from_tensor_list
+
+from torch.jit.annotations import List, Dict, Optional
 
 
 class GeneralizedSSD(nn.Module):
@@ -19,14 +22,33 @@ class GeneralizedSSD(nn.Module):
             detections from it.
     """
 
-    def __init__(self, backbone, prior_generator, multibox_head, post_process):
+    def __init__(
+        self,
+        backbone: nn.Module,
+        prior_generator: nn.Module,
+        multibox_head: nn.Module,
+        post_process: Optional[nn.Module],
+    ):
         super().__init__()
         self.backbone = backbone
         self.prior_generator = prior_generator
         self.multibox_head = multibox_head
         self.post_process = post_process
+        # used only on torchscript mode
+        self._has_warned = False
 
-    def forward(self, samples: NestedTensor, target_sizes: Tensor):
+    @torch.jit.unused
+    def eager_outputs(self, losses: Dict[str, Tensor], detections: List[Dict[str, Tensor]]):
+        if self.training:
+            return losses
+
+        return detections
+
+    def forward(
+        self,
+        samples: NestedTensor,
+        target_sizes: Optional[Tensor] = None,
+    ):
         """
         Arguments:
             samples (NestedTensor): Expects a NestedTensor, which consists of:
@@ -44,7 +66,18 @@ class GeneralizedSSD(nn.Module):
 
         priors = self.prior_generator(features)  # BoxMode: XYWHA_REL
         logits, bbox_reg = self.multibox_head(features)
+        out_ssd = {}
+        detections = torch.jit.annotate(List[Dict[str, Tensor]], [])
 
-        out = self.post_process(logits, bbox_reg, priors, target_sizes)
+        if self.training:
+            out_ssd = {'pred_logits': logits, 'pred_boxes': bbox_reg, 'priors': priors}
+        else:
+            detections = self.post_process(logits, bbox_reg, priors, target_sizes)
 
-        return out
+        if torch.jit.is_scripting():
+            if not self._has_warned:
+                warnings.warn("DEMONET always returns a (Losses, Detections) tuple in scripting")
+                self._has_warned = True
+            return (out_ssd, detections)
+        else:
+            return self.eager_outputs(out_ssd, detections)

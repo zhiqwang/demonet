@@ -22,6 +22,8 @@ def get_args_parser():
 
     parser.add_argument('--arch', default='ssd_lite_mobilenet_v2',
                         help='model architecture')
+    parser.add_argument('--return-criterion', action='store_true',
+                        help='Should be enabled in training mode')
     parser.add_argument('--data-path', default='./data-bin',
                         help='dataset')
     parser.add_argument('--dataset-file', default='coco',
@@ -78,10 +80,10 @@ def get_args_parser():
                         help='resume from checkpoint')
     parser.add_argument('--start-epoch', default=0, type=int,
                         help='start epoch')
-    parser.add_argument("--test-only", action="store_true",
-                        help="Only test the model")
-    parser.add_argument("--pretrained", action="store_true",
-                        help="Use pre-trained models from the modelzoo")
+    parser.add_argument('--test-only', action='store_true',
+                        help='Only test the model')
+    parser.add_argument('--pretrained', action='store_true',
+                        help='Use pre-trained models from the modelzoo')
 
     # distributed training parameters
     parser.add_argument('--world-size', default=1, type=int,
@@ -130,9 +132,11 @@ def main(args):
         num_workers=args.num_workers,
     )
 
-    print("Creating model")
-    model = build_model(args)
+    print("Creating model, always set args.return_criterion be True")
+    args.return_criterion = True
+    model, criterion = build_model(args)
     model.to(device)
+    criterion.to(device)
 
     model_without_ddp = model
     if args.distributed:
@@ -178,7 +182,7 @@ def main(args):
     for epoch in range(args.start_epoch, args.epochs):
         if args.distributed:
             sampler_train.set_epoch(epoch)
-        train_one_epoch(model, optimizer, data_loader_train, device, epoch, args.print_freq)
+        train_one_epoch(model, criterion, optimizer, data_loader_train, device, epoch, args.print_freq)
 
         lr_scheduler.step()
         if args.output_dir:
@@ -194,7 +198,7 @@ def main(args):
             )
 
         # evaluate after every epoch
-        # evaluate(model, data_loader_val, device=device)
+        # evaluate(model, criterion, data_loader_val, device=device)
 
     total_time = time.time() - start_time
     total_time_str = str(datetime.timedelta(seconds=int(total_time)))
