@@ -342,7 +342,6 @@ class PostProcess(nn.Module):
         """
         device = pred_logits.device
         num_classes = pred_logits.shape[-1]
-        num_priors = self._get_num_priors(priors)
 
         if target_sizes is None:
             batch_size = pred_logits.shape[0]
@@ -354,16 +353,14 @@ class PostProcess(nn.Module):
         results = torch.jit.annotate(List[Dict[str, Tensor]], [])
         for boxes, scores, target_size in zip(out_boxes, out_scores, target_sizes):
             # For each class, perform nms
-            boxes = boxes.reshape(num_priors, 1, 4)
-            boxes = boxes.expand(num_priors, num_classes, 4)
             boxes = boxes * target_size.flip(0).repeat(2)
+            boxes = torch.cat([boxes for _ in range(num_classes - 1)], dim=1)
 
             # create labels for each prediction
             labels = torch.arange(num_classes, device=device)
             labels = labels.view(1, -1).expand_as(scores)
 
             # remove predictions with the background label
-            boxes = boxes[:, 1:]
             scores = scores[:, 1:]
             labels = labels[:, 1:]
 
