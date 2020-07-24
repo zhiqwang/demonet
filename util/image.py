@@ -19,10 +19,10 @@ def image_transform(
     # Normalization
     if mean is not None:
         mean = np.array(mean, dtype=np.float32)  # RGB
-        image -= mean[None, None, :]
+        image -= mean
     if std is not None:
         std = np.array(std, dtype=np.float32)  # RGB
-        image /= std[None, None, :]
+        image /= std
     image = image.transpose([2, 0, 1])  # change to C x H x W
 
     return image
