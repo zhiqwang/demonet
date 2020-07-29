@@ -308,16 +308,23 @@ def _onnx_nested_tensor_from_tensor_list(tensor_list):
 
     # work around for
     # pad_img[: img.shape[0], : img.shape[1], : img.shape[2]].copy_(img)
+    # m[: img.shape[1], :img.shape[2]] = False
     # which is not yet supported in onnx
     padded_imgs = []
+    padded_masks = []
     for img in tensor_list:
         padding = [(s1 - s2) for s1, s2 in zip(max_size, tuple(img.shape))]
         padded_img = torch.nn.functional.pad(img, (0, padding[2], 0, padding[1], 0, padding[0]))
         padded_imgs.append(padded_img)
 
-    tensor = torch.stack(padded_imgs)
+        m = torch.zeros_like(img[0], dtype=torch.int, device=img.device)
+        padded_mask = torch.nn.functional.pad(m, (0, padding[2], 0, padding[1]), "constant", 1)
+        padded_masks.append(padded_mask.to(torch.bool))
 
-    return NestedTensor(tensor, mask=None)
+    tensor = torch.stack(padded_imgs)
+    mask = torch.stack(padded_masks)
+
+    return NestedTensor(tensor, mask)
 
 
 class NestedTensor(object):
