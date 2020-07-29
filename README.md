@@ -19,10 +19,10 @@ There are no extra compiled components in DEMONET and package dependencies are m
 git clone https://github.com/vanillapi/demonet.git
 ```
 
-Then, install PyTorch 1.7+ and torchvision 0.8+ (Preview Nightly version):
+Then, install PyTorch 1.6+ and torchvision 0.7+:
 
 ```
-conda install pytorch torchvision cudatoolkit=10.2 -c pytorch-nightly
+conda install pytorch torchvision cudatoolkit=10.2 -c pytorch
 ```
 
 Install pycocotools (for evaluation on COCO) and scipy (for training):
