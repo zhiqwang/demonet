@@ -38,30 +38,33 @@ That's it, should be good to train and evaluate detection models.
 
 We provide [`ssd_lite_mobilenet_v2`](models/ssd_mobilenet.py) ~~pretrained model [weights](https://drive.google.com/file/d/11isfA_F3QUzsWVzflrY2MXJYqwNt2xCV/view?usp=sharing)~~ (For the SSD network structure is frequently updated now, the provided model can't be loaded, contact me for the lastest model via [email](mailto:zhiqwang@outlook.com)), with map 68.39 on VOC07 test subset (Training using VOC07+12 trainval subset).
 
-```
-AP for aeroplane = 0.6822
-AP for bicycle = 0.7829
-AP for bird = 0.6418
-AP for boat = 0.5453
-AP for bottle = 0.3479
-AP for bus = 0.7876
-AP for car = 0.7411
-AP for cat = 0.8305
-AP for chair = 0.5358
-AP for cow = 0.6127
-AP for diningtable = 0.7282
-AP for dog = 0.7757
-AP for horse = 0.8281
-AP for motorbike = 0.8114
-AP for person = 0.7201
-AP for pottedplant = 0.4385
-AP for sheep = 0.6250
-AP for sofa = 0.7706
-AP for train = 0.8191
-AP for tvmonitor = 0.6545
+<details>
 
-Average Precision Across All Classes = 0.6839
-```
+  <summary>Average Precision Across All Classes = 0.6839</summary><br/>
+
+  ```
+  AP for aeroplane = 0.6822
+  AP for bicycle = 0.7829
+  AP for bird = 0.6418
+  AP for boat = 0.5453
+  AP for bottle = 0.3479
+  AP for bus = 0.7876
+  AP for car = 0.7411
+  AP for cat = 0.8305
+  AP for chair = 0.5358
+  AP for cow = 0.6127
+  AP for diningtable = 0.7282
+  AP for dog = 0.7757
+  AP for horse = 0.8281
+  AP for motorbike = 0.8114
+  AP for person = 0.7201
+  AP for pottedplant = 0.4385
+  AP for sheep = 0.6250
+  AP for sofa = 0.7706
+  AP for train = 0.8191
+  AP for tvmonitor = 0.6545
+  ```
+</details>
 
 ## 🧗 Data preparation
 
@@ -86,57 +89,65 @@ When you are using PASCAL VOC format, we expect the directory structure to be th
 
 ## 🦄 Training
 
-```
-CUDA_VISIBLE_DEVICES=[GPU_ID] python -m train \
-    --arch ssd_lite_mobilenet_v2 \
-    --image-size 300 \
-    --dataset-file voc \
-    --train-set trainval \
-    --val-set test \
-    --dataset-year 2007 2012 \
-    --data-path path/to/data-path/ \
-    --output-dir [CHECKPOINT_PATH] \
-    --epochs [NUM_EPOCHS] \
-    --num-classes [NUM_CLASSES] \
-    --batch-size 32 \
-    --lr 0.01
-```
+<details>
+  <summary><b>Example training script</b></summary><br/>
+
+  ```
+  CUDA_VISIBLE_DEVICES=[GPU_ID] python -m train \
+      --arch ssd_lite_mobilenet_v2 \
+      --image-size 300 \
+      --dataset-file voc \
+      --train-set trainval \
+      --val-set test \
+      --dataset-year 2007 2012 \
+      --data-path path/to/data-path/ \
+      --output-dir [CHECKPOINT_PATH] \
+      --epochs [NUM_EPOCHS] \
+      --num-classes [NUM_CLASSES] \
+      --batch-size 32 \
+      --lr 0.01
+  ```
+
+</details>
 
 ## 🔬 Evaluation
 
-### Evaluation on voc dataset
+<details>
+  <summary><b>Example evaluation script</b></summary><br/>
 
-```
-CUDA_VISIBLE_DEVICES=[GPU_ID] python -m eval_voc \
-    --arch ssd_lite_mobilenet_v2 \
-    --image-size 300 \
-    --dataset-file voc \
-    --val-set test \
-    --dataset-year 2007 \
-    --data-path path/to/data-path/ \
-    --num-classes [NUM_CLASSES] \
-    --batch-size 32 \
-    --resume [CHECKPOINT_PATH] \
-    --output-dir [OUTPUT_DIR]
-```
+  Evaluation on voc dataset
 
-### Evaluation on coco dataset
+  ```
+  CUDA_VISIBLE_DEVICES=[GPU_ID] python -m eval_voc \
+      --arch ssd_lite_mobilenet_v2 \
+      --image-size 300 \
+      --dataset-file voc \
+      --val-set test \
+      --dataset-year 2007 \
+      --data-path path/to/data-path/ \
+      --num-classes [NUM_CLASSES] \
+      --batch-size 32 \
+      --resume [CHECKPOINT_PATH] \
+      --output-dir [OUTPUT_DIR]
+  ```
 
-```
-CUDA_VISIBLE_DEVICES=[GPU_ID] python -m train \
-    --arch ssd_lite_mobilenet_v2 \
-    --image-size 300 \
-    --dataset-file coco \
-    --dataset-mode pascal \
-    --val-set test \
-    --dataset-year 2007 \
-    --data-path path/to/data-path/ \
-    --resume [CHECKPOINT_PATH] \
-    --num-classes [NUM_CLASSES] \
-    --batch-size 32 \
-    --test-only
-```
+  Evaluation on coco dataset
 
+  ```
+  CUDA_VISIBLE_DEVICES=[GPU_ID] python -m train \
+      --arch ssd_lite_mobilenet_v2 \
+      --image-size 300 \
+      --dataset-file coco \
+      --dataset-mode pascal \
+      --val-set test \
+      --dataset-year 2007 \
+      --data-path path/to/data-path/ \
+      --resume [CHECKPOINT_PATH] \
+      --num-classes [NUM_CLASSES] \
+      --batch-size 32 \
+      --test-only
+  ```
+</details>
 
 ## 🎓 Acknowledgement
 
