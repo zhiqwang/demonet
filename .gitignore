@@ -37,8 +37,13 @@ __pycache__
 *.pyc
 *.pyd
 
-# Compiled MATLAB
-*.mex*
+# Compiled cpp directory
+build
+
+# Executables
+*.exe
+*.out
+*.app
 
 # IPython notebook checkpoints
 .ipynb_checkpoints
