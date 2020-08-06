@@ -1,6 +1,9 @@
 // One-stop header.
 #include <torch/script.h>
 
+// header for torchvision
+#include <torchvision/nms.h>
+
 // headers for opencv
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
@@ -15,6 +18,8 @@
 #define kIMAGE_SIZE 320
 #define kCHANNELS 3
 #define kTOP_K 3
+
+static auto registry = torch::RegisterOperators().op("torchvision::nms", &nms);
 
 bool LoadImage(std::string file_name, cv::Mat &image,
                float &width, float &height) {
@@ -62,7 +67,7 @@ int main(int argc, const char *argv[]) {
   torch::jit::script::Module module = torch::jit::load(argv[1]);
   std::cout << "== Switch to GPU mode" << std::endl;
   // to GPU
-  module.to(at::kCUDA);
+  module.to(torch::kCUDA);
 
   std::cout << "== DEMONET loaded!\n";
   std::vector<std::string> labels;
@@ -91,25 +96,32 @@ int main(int argc, const char *argv[]) {
       input_tensor[0][1] = input_tensor[0][1].sub_(0.456).div_(0.224);
       input_tensor[0][2] = input_tensor[0][2].sub_(0.406).div_(0.225);
 
-      auto image_sizes = torch::tensor({img_width, img_height});
+      float image_size[] = {img_height, img_width};
+      torch::Tensor image_shapes = torch::from_blob(image_size, {1, 2});
 
       // to GPU
-      input_tensor = input_tensor.to(at::kCUDA);
-      image_sizes = image_sizes.to(at::kCUDA);
+      input_tensor = input_tensor.to(torch::kCUDA);
+      image_shapes = image_shapes.to(torch::kCUDA);
 
-      auto results = module.forward({input_tensor, image_sizes}).toTensor();
+      // std::cout << "tensors: " << input_tensor << std::endl;
+      // std::cout << "size: " << image_shapes << std::endl;
 
-      // at::Tensor detections = std::get<1>(results)[0];
-      std::cout << "Results: " << results << std::endl;
+      auto output = module.forward({input_tensor, image_shapes});
 
-      // for (int i = 0; i < kTOP_K; ++i) {
-      //   auto idx = indexs[i].item<int>();
-      //   std::cout << "    ============= Top-" << i + 1
-      //             << " =============" << std::endl;
-      //   std::cout << "    Label:  " << labels[idx] << std::endl;
-      //   std::cout << "    With Probability:  "
-      //             << softmaxs[i].item<float>() * 100.0f << "%" << std::endl;
-      // }
+      std::cout << "output: " << output << std::endl;
+
+      auto out1 = output.toTuple();
+      auto dets = out1->elements().at(1).toGenericDict();
+
+      std::cout << "dets: " << dets << std::endl;
+      // auto det0 = dets.get(0).toGenericDict() ;
+      // at::Tensor scores = det0.at("scores").toTensor();
+      // at::Tensor labels = det0.at("labels").toTensor();
+      // at::Tensor boxes = det0.at("boxes").toTensor();
+
+      // std::cout << "scores: " << scores << std::endl;
+      // std::cout << "lables: " << labels << std::endl;
+      // std::cout << "boxes: " << boxes << std::endl;
 
     } else {
       std::cout << "Can't load the image, please check your path." << std::endl;
