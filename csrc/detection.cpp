@@ -57,17 +57,27 @@ bool LoadImageNetLabel(std::string file_name,
 }
 
 int main(int argc, const char *argv[]) {
-  if (argc != 3) {
-    std::cerr << "Usage: detect <path-to-exported-script-module> "
-                 "<path-to-lable-file>"
+  if (argc != 4) {
+    std::cerr << "Usage: demonet <path-to-exported-script-module> "
+                 "<path-to-lable-file> <path-to-image-file>"
               << std::endl;
     return -1;
   }
 
+  torch::DeviceType device_type;
+  if(torch::cuda::is_available()){
+    device_type = torch::kCUDA;
+    std::cout << "Using GPU ..." << std::endl;
+  }else{
+    device_type = torch::kCPU;
+    std::cout << "Using CPU ..." << std::endl;
+  }
+  torch::Device device(device_type);
+
   torch::jit::script::Module module = torch::jit::load(argv[1]);
   std::cout << "== Switch to GPU mode" << std::endl;
   // to GPU
-  module.to(torch::kCUDA);
+  module.to(device);
 
   std::cout << "== DEMONET loaded!\n";
   std::vector<std::string> labels;
@@ -78,54 +88,38 @@ int main(int argc, const char *argv[]) {
     return -1;
   }
 
-  std::string file_name = "";
+  std::string file_name = argv[3];
   cv::Mat image;
   float img_width = 0.;
   float img_height = 0.;
-  while (true) {
-    std::cout << "== Input image path: [enter Q to exit]" << std::endl;
-    std::cin >> file_name;
-    if (file_name == "Q") {
-      break;
-    }
-    if (LoadImage(file_name, image, img_width, img_height)) {
-      auto input_tensor = torch::from_blob(
-          image.data, {1, kIMAGE_SIZE, kIMAGE_SIZE, kCHANNELS});
-      input_tensor = input_tensor.permute({0, 3, 1, 2});
-      input_tensor[0][0] = input_tensor[0][0].sub_(0.485).div_(0.229);
-      input_tensor[0][1] = input_tensor[0][1].sub_(0.456).div_(0.224);
-      input_tensor[0][2] = input_tensor[0][2].sub_(0.406).div_(0.225);
 
-      float image_size[] = {img_height, img_width};
-      torch::Tensor image_shapes = torch::from_blob(image_size, {1, 2});
+  if (LoadImage(file_name, image, img_width, img_height)) {
+    auto input_tensor = torch::from_blob(
+        image.data, {1, kIMAGE_SIZE, kIMAGE_SIZE, kCHANNELS});
+    input_tensor = input_tensor.permute({0, 3, 1, 2});
+    input_tensor[0][0] = input_tensor[0][0].sub_(0.485).div_(0.229);
+    input_tensor[0][1] = input_tensor[0][1].sub_(0.456).div_(0.224);
+    input_tensor[0][2] = input_tensor[0][2].sub_(0.406).div_(0.225);
 
-      // to GPU
-      input_tensor = input_tensor.to(torch::kCUDA);
-      image_shapes = image_shapes.to(torch::kCUDA);
+    float image_size[] = {img_height, img_width};
+    torch::Tensor image_shapes = torch::from_blob(image_size, {1, 2});
 
-      // std::cout << "tensors: " << input_tensor << std::endl;
-      // std::cout << "size: " << image_shapes << std::endl;
+    // to GPU
+    input_tensor = input_tensor.to(device);
+    image_shapes = image_shapes.to(device);
 
-      auto output = module.forward({input_tensor, image_shapes});
+    auto output = module.forward({input_tensor, image_shapes});
 
-      std::cout << "output: " << output << std::endl;
+    std::cout << "output: " << output << std::endl;
 
-      auto out1 = output.toTuple();
-      auto dets = out1->elements().at(1).toGenericDict();
+    auto out1 = output.toTuple();
+    auto dets = out1->elements().at(1).toGenericDict();
 
-      std::cout << "dets: " << dets << std::endl;
-      // auto det0 = dets.get(0).toGenericDict() ;
-      // at::Tensor scores = det0.at("scores").toTensor();
-      // at::Tensor labels = det0.at("labels").toTensor();
-      // at::Tensor boxes = det0.at("boxes").toTensor();
+    std::cout << "dets: " << dets << std::endl;
 
-      // std::cout << "scores: " << scores << std::endl;
-      // std::cout << "lables: " << labels << std::endl;
-      // std::cout << "boxes: " << boxes << std::endl;
-
-    } else {
-      std::cout << "Can't load the image, please check your path." << std::endl;
-    }
+  } else {
+    std::cout << "Can't load the image, please check your path." << std::endl;
   }
+
   return 0;
 }
