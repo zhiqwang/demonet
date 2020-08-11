@@ -12,6 +12,7 @@ def _make_mobilenet_v2(image_size=320, score_thresh=0.5, num_classes=21):
     model = SSDLiteWithMobileNetV2(
         backbone_with_extra_blocks,
         image_size=image_size,
+        num_classes=num_classes,
         score_thresh=score_thresh,
     )
 
@@ -26,13 +27,16 @@ def ssd_lite_mobilenet_v2(
     image_size=320,
     score_thresh=0.5,
     num_classes=21,
-    return_postprocessor=False,
 ):
     """
     ssd lite with mobilenet v2 backbone.
     Achieves 68.39 AP50 on PASCAL VOC.
     """
-    model = _make_mobilenet_v2(image_size=image_size, score_thresh=score_thresh)
+    model = _make_mobilenet_v2(
+        image_size=image_size,
+        score_thresh=score_thresh,
+        num_classes=num_classes,
+    )
     if pretrained:
         checkpoint = torch.load(model_urls['ssd_lite_mobilenet_v2'], map_location="cpu")
         model.load_state_dict(checkpoint)
