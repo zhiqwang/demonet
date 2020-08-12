@@ -15,19 +15,19 @@ PyTorch training code and models reimplentation for object detection as describe
 
 There are no extra compiled components in DEMONET and package dependencies are minimal, so the code is very simple to use. We provide instructions how to install dependencies via conda. First, clone the repository locally:
 
-```
+```bash
 git clone https://github.com/vanillapi/demonet.git
 ```
 
 Then, install PyTorch 1.6+ and torchvision 0.7+:
 
-```
+```bash
 conda install pytorch torchvision cudatoolkit=10.2 -c pytorch
 ```
 
 Install pycocotools (for evaluation on COCO) and scipy (for training):
 
-```
+```bash
 conda install cython scipy
 pip install -U 'git+https://github.com/cocodataset/cocoapi.git#subdirectory=PythonAPI'
 ```
@@ -42,7 +42,7 @@ We provide [`ssd_lite_mobilenet_v2`](models/ssd_mobilenet.py) ~~pretrained model
 
   <summary>Average Precision Across All Classes = 0.6839</summary><br/>
 
-  ```
+  ```log
   AP for aeroplane = 0.6822
   AP for bicycle = 0.7829
   AP for bird = 0.6418
@@ -66,11 +66,11 @@ We provide [`ssd_lite_mobilenet_v2`](models/ssd_mobilenet.py) ~~pretrained model
   ```
 </details>
 
-## 🧗 Data preparation
+## 🧗 Data Preparation
 
 Support trainint with COCO and PASCAL VOC format (chosen with the parameter `--dataset-file [coco/voc]`). With COCO format we expect the directory structure to be the following:
 
-```
+```bash
 .
 └── path/to/data-path/
     ├── annotations  # annotation json files
@@ -79,7 +79,7 @@ Support trainint with COCO and PASCAL VOC format (chosen with the parameter `--d
 
 When you are using PASCAL VOC format, we expect the directory structure to be the following:
 
-```
+```bash
 .
 └── path/to/data-path/
     └── VOCdevkit
@@ -87,12 +87,12 @@ When you are using PASCAL VOC format, we expect the directory structure to be th
         └── VOC2012
 ```
 
-## 🦄 Training
+## 🦄 Training and Evaluation Snippets
 
 <details>
   <summary><b>Example training script</b></summary><br/>
 
-  ```
+  ```bash
   CUDA_VISIBLE_DEVICES=[GPU_ID] python -m train \
       --arch ssd_lite_mobilenet_v2 \
       --image-size 300 \
@@ -110,14 +110,12 @@ When you are using PASCAL VOC format, we expect the directory structure to be th
 
 </details>
 
-## 🔬 Evaluation
-
 <details>
   <summary><b>Example evaluation script</b></summary><br/>
 
   Evaluation on voc dataset
 
-  ```
+  ```bash
   CUDA_VISIBLE_DEVICES=[GPU_ID] python -m eval_voc \
       --arch ssd_lite_mobilenet_v2 \
       --image-size 300 \
@@ -133,7 +131,7 @@ When you are using PASCAL VOC format, we expect the directory structure to be th
 
   Evaluation on coco dataset
 
-  ```
+  ```bash
   CUDA_VISIBLE_DEVICES=[GPU_ID] python -m train \
       --arch ssd_lite_mobilenet_v2 \
       --image-size 300 \
