@@ -21,8 +21,9 @@
 
 static auto registry = torch::RegisterOperators().op("torchvision::nms", &nms);
 
-bool LoadImage(std::string file_name, cv::Mat &image,
-               float &width, float &height) {
+bool LoadImage(
+    std::string file_name, cv::Mat &image,
+    float &width, float &height) {
   image = cv::imread(file_name);  // CV_8UC3
   if (image.empty() || !image.data) {
     return false;
@@ -43,8 +44,9 @@ bool LoadImage(std::string file_name, cv::Mat &image,
   return true;
 }
 
-bool LoadImageNetLabel(std::string file_name,
-                       std::vector<std::string> &labels) {
+bool LoadImageNetLabel(
+    std::string file_name,
+    std::vector<std::string> &labels) {
   std::ifstream ifs(file_name);
   if (!ifs) {
     return false;
@@ -58,14 +60,13 @@ bool LoadImageNetLabel(std::string file_name,
 
 int main(int argc, const char *argv[]) {
   if (argc != 4) {
-    std::cerr << "Usage: demonet <path-to-exported-script-module> "
-                 "<path-to-lable-file> <path-to-image-file>"
-              << std::endl;
+    std::cerr << "Usage: app <path-to-exported-script-module> "
+                 "<path-to-lable> <path-to-image>" << std::endl;
     return -1;
   }
 
   torch::DeviceType device_type;
-  if(torch::cuda::is_available()){
+  if(torch::cuda::is_available()) {
     device_type = torch::kCUDA;
     std::cout << "Using GPU ..." << std::endl;
   }else{

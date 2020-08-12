@@ -2,8 +2,7 @@
 
 #include <torchvision/models/resnet.h>
 
-int main()
-{
+int main() {
   auto model = vision::models::MobileNet();
   model->eval();
 

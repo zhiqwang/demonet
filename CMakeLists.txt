@@ -10,7 +10,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")
 
 include_directories(${PROJECT_SOURCE_DIR}/csrc)
 
-FILE( GLOB source_src
+FILE( GLOB SOURCE_FILES
   csrc/backbone.cpp
   csrc/IntermediateLayerGetter.cpp
   csrc/SegmentationModel.cpp
@@ -18,8 +18,14 @@ FILE( GLOB source_src
   scrc/predict.cpp
 )
 
-add_executable(demonet ${source_src})
-target_link_libraries(demonet ${OpenCV_LIBS} ${TORCH_LIBRARIES} TorchVision::TorchVision)
+add_executable(${CMAKE_PROJECT_NAME} ${SOURCE_FILES})
+
+target_link_libraries(
+  ${CMAKE_PROJECT_NAME}
+  ${OpenCV_LIBS}
+  ${TORCH_LIBRARIES}
+  TorchVision::TorchVision
+)
 
 # set C++14 to compile PyTorch
 set_property(TARGET demonet PROPERTY CXX_STANDARD 14)

@@ -3,8 +3,7 @@
 #include "../IntermediateLayerGetter.h"
 #include "../resnet.h"
 
-class SegmentationModelImpl :public torch::nn::Module
-{
+class SegmentationModelImpl :public torch::nn::Module {
 public:
   SegmentationModelImpl();
   ~SegmentationModelImpl();

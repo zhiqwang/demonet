@@ -1,12 +1,8 @@
 #include <csrc/IntermediateLayerGetter.h>
 
-IntermediateLayerGetterImpl::~IntermediateLayerGetterImpl()
-{
+IntermediateLayerGetterImpl::~IntermediateLayerGetterImpl() {}
 
-}
-
-std::vector<torch::Tensor> IntermediateLayerGetterImpl::forward(torch::Tensor x)
-{
+std::vector<torch::Tensor> IntermediateLayerGetterImpl::forward(torch::Tensor x) {
   std::vector<torch::Tensor> results;
 
   x = _module["conv1"]->as<torch::nn::Conv2d>()->forward(x);	

@@ -6,8 +6,7 @@
 #include <functional>
 #include <utility>
 
-class ASPPConvImpl : public torch::nn::Cloneable<ASPPConvImpl>
-{
+class ASPPConvImpl : public torch::nn::Cloneable<ASPPConvImpl>{
 public:
   explicit ASPPConvImpl(int64_t in_channels, int64_t out_channels, int64_t dilation);
   ~ASPPConvImpl();
@@ -23,8 +22,7 @@ public:
 
 TORCH_MODULE(ASPPConv);
 
-class ASPPPoolingImpl : public torch::nn::Cloneable<ASPPPoolingImpl>
-{
+class ASPPPoolingImpl : public torch::nn::Cloneable<ASPPPoolingImpl> {
 public:
   explicit ASPPPoolingImpl(int64_t in_channels, int64_t out_channels);
   ~ASPPPoolingImpl();
@@ -40,10 +38,12 @@ public:
 
 TORCH_MODULE(ASPPPooling);
 
-class ConvsImpl : public torch::nn::Module
-{
+class ConvsImpl : public torch::nn::Module {
 public:
-  ConvsImpl(int64_t in_channels, int64_t out_channels = 256, std::vector<int64_t>  atrous_rates = { 12,24,36 });
+  ConvsImpl(
+      int64_t in_channels,
+      int64_t out_channels = 256,
+      std::vector<int64_t> atrous_rates = { 12,24,36 });
   ~ConvsImpl();
 
   torch::nn::Sequential _conv1{ nullptr };
@@ -55,10 +55,9 @@ public:
 
 TORCH_MODULE(Convs);
 
-class ASPPImpl : public torch::nn::Cloneable<ASPPImpl>
-{
+class ASPPImpl : public torch::nn::Cloneable<ASPPImpl> {
 public:
-  explicit ASPPImpl(int64_t in_channels, std::vector<int64_t>  atrous_rates = { 12,24,36 });
+  explicit ASPPImpl(int64_t in_channels, std::vector<int64_t>  atrous_rates = {12, 24, 36});
   ~ASPPImpl();
 
   void reset() override;
