@@ -29,6 +29,7 @@ void Demo(
     cv::Mat& img,
     const std::vector<std::tuple<cv::Rect, float, int>>& data_vec,
     const std::vector<std::string>& class_names,
+    const std::string& img_name,
     bool label = true) {
   for (const auto & data : data_vec) {
     cv::Rect box;
@@ -57,9 +58,7 @@ void Demo(
     }
   }
 
-  cv::namedWindow("Result", cv::WINDOW_AUTOSIZE);
-  cv::imshow("Result", img);
-  cv::waitKey(0);
+  cv::imwrite(img_name, img);
 }
 
 
@@ -85,7 +84,8 @@ int main(int argc, const char* argv[]) {
   }
 
   // load input image
-  cv::Mat img = cv::imread(argv[3]);
+  std::string img_name = argv[3];
+  cv::Mat img = cv::imread(img_name);
   if (img.empty()) {
     std::cerr << "Error loading the image!" << std::endl;
     return -1;
@@ -98,5 +98,6 @@ int main(int argc, const char* argv[]) {
   auto result = detector.Run(img, kConfThreshold, kIouThreshold);
 
   // visualize detections
-  Demo(img, result, class_names);
+  std::string img_vis_name = img_name.substr(0, img_name.find_last_of('.')) + "_det.jpg";
+  Demo(img, result, class_names, img_vis_name);
 }
