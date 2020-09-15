@@ -26,6 +26,7 @@ from src.dataset import create_ssd_dataset, data_to_mindrecord_byte_image, voc_d
 from src.config import config
 from src.coco_eval import metrics
 
+
 def ssd_eval(dataset_path, ckpt_path):
     """SSD evaluation."""
     batch_size = 1

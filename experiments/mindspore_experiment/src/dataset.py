@@ -34,6 +34,7 @@ def _rand(a=0., b=1.):
     """Generate random."""
     return np.random.rand() * (b - a) + a
 
+
 def get_imageId_from_fileName(filename):
     """Get imageID from fileName"""
     try:
@@ -41,6 +42,7 @@ def get_imageId_from_fileName(filename):
         return int(filename)
     except:
         raise NotImplementedError('Filename %s is supposed to be an integer.'%(filename))
+
 
 def random_sample_crop(image, boxes):
     """Random Crop the image and boxes"""
@@ -64,7 +66,7 @@ def random_sample_crop(image, boxes):
         left = _rand() * (width - w)
         top = _rand() * (height - h)
 
-        rect = np.array([int(top), int(left), int(top+h), int(left+w)])
+        rect = np.array([int(top), int(left), int(top + h), int(left + w)])
         overlap = jaccard_numpy(boxes, rect)
 
         # dropout some boxes
@@ -109,7 +111,7 @@ def preprocess_fn(img_id, image, box, is_training):
 
         image = cv2.resize(image, (input_w, input_h))
 
-        #When the channels of image is 1
+        # When the channels of image is 1
         if len(image.shape) == 2:
             image = np.expand_dims(image, axis=-1)
             image = np.concatenate([image, image, image], axis=-1)
@@ -158,7 +160,7 @@ def create_voc_label(is_training):
     voc_dir = config.voc_dir
     cls_map = {name: i for i, name in enumerate(config.coco_classes)}
     sub_dir = 'train' if is_training else 'eval'
-    #sub_dir = 'train'
+    # sub_dir = 'train'
     voc_dir = os.path.join(voc_dir, sub_dir)
     if not os.path.isdir(voc_dir):
         raise ValueError(f'Cannot find {sub_dir} dataset path.')
@@ -212,11 +214,12 @@ def create_voc_label(is_training):
             if not is_training:
                 o_width = abs(x_max - x_min)
                 o_height = abs(y_max - y_min)
-                ann = {'area': o_width * o_height, 'iscrowd': 0, 'image_id': \
-                    img_id, 'bbox': [x_min, y_min, o_width, o_height], \
-                       'category_id': cls_map[cls_name], 'id': bnd_id, \
-                       'ignore': 0, \
-                       'segmentation': []}
+                ann = {
+                    'area': o_width * o_height, 'iscrowd': 0, 'image_id': img_id,
+                    'bbox': [x_min, y_min, o_width, o_height],
+                    'category_id': cls_map[cls_name], 'id': bnd_id,
+                    'ignore': 0, 'segmentation': [],
+                }
                 json_dict['annotations'].append(ann)
                 bnd_id = bnd_id + 1
 
@@ -244,6 +247,7 @@ def create_voc_label(is_training):
 
     return images, image_files_dict, image_anno_dict
 
+
 def create_coco_label(is_training):
     """Get image path and annotation from COCO."""
     from pycocotools.coco import COCO
@@ -253,7 +257,7 @@ def create_coco_label(is_training):
     if is_training:
         data_type = config.train_data_type
 
-    #Classes need to train or test.
+    # Classes need to train or test.
     train_cls = config.coco_classes
     train_cls_dict = {}
     for i, cls in enumerate(train_cls):
@@ -393,7 +397,7 @@ def create_ssd_dataset(mindrecord_file, batch_size=32, repeat_num=10, device_num
     decode = C.Decode()
     ds = ds.map(input_columns=["image"], operations=decode)
     change_swap_op = C.HWC2CHW()
-    normalize_op = C.Normalize(mean=[0.485*255, 0.456*255, 0.406*255], std=[0.229*255, 0.224*255, 0.225*255])
+    normalize_op = C.Normalize(mean=[0.485 * 255, 0.456 * 255, 0.406 * 255], std=[0.229 * 255, 0.224 * 255, 0.225 * 255])
     color_adjust_op = C.RandomColorAdjust(brightness=0.4, contrast=0.4, saturation=0.4)
     compose_map_func = (lambda img_id, image, annotation: preprocess_fn(img_id, image, annotation, is_training))
     if is_training:

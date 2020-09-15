@@ -65,7 +65,7 @@ def metrics(pred_data):
     coco_root = config.coco_root
     data_type = config.val_data_type
 
-    #Classes need to train or test.
+    # Classes need to train or test.
     val_cls = config.coco_classes
     val_cls_dict = {}
     for i, cls in enumerate(val_cls):

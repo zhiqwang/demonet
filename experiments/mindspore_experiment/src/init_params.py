@@ -17,6 +17,7 @@
 import numpy as np
 from mindspore.common.initializer import initializer, TruncatedNormal
 
+
 def init_net_param(network, initialize_mode='TruncatedNormal'):
     """Init the parameters in net."""
     params = network.trainable_params()
@@ -40,6 +41,7 @@ def load_backbone_params(network, param_dict):
             param_name = '.'.join(['features', str(int(name_split[1]) + 14)] + name_split[2:])
         if param_name in param_dict:
             param.set_parameter_data(param_dict[param_name].data)
+
 
 def filter_checkpoint_parameter(param_dict):
     """remove useless parameters"""

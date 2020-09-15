@@ -197,6 +197,7 @@ class FlattenConcat(nn.Cell):
         self.num_ssd_boxes = config.num_ssd_boxes
         self.concat = P.Concat(axis=1)
         self.transpose = P.Transpose()
+
     def construct(self, inputs):
         output = ()
         batch_size = F.shape(inputs[0])[0]
@@ -445,7 +446,7 @@ class SSDWithMobileNetV2(nn.Cell):
             raise ValueError("inverted_residual_setting should be non-empty "
                              "or a 4-element list, got {}".format(inverted_residual_setting))
 
-        #building first layer
+        # building first layer
         input_channel = _make_divisible(input_channel * width_mult, round_nearest)
         self.last_channel = _make_divisible(last_channel * max(1.0, width_mult), round_nearest)
         features = [ConvBNReLU(3, input_channel, stride=2)]
@@ -475,6 +476,7 @@ class SSDWithMobileNetV2(nn.Cell):
 
     def get_out_channels(self):
         return self.last_channel
+
 
 def ssd_mobilenet_v2(**kwargs):
     return SSDWithMobileNetV2(**kwargs)

@@ -52,7 +52,7 @@ def main():
                         help="Filter weight parameters, default is False.")
     args_opt = parser.parse_args()
 
-    context.set_context(mode=context.GRAPH_MODE, device_target="Ascend", device_id=args_opt.device_id)
+    context.set_context(mode=context.GRAPH_MODE, device_target="GPU", device_id=args_opt.device_id)
 
     if args_opt.distribute:
         device_num = args_opt.device_num
@@ -143,6 +143,7 @@ def main():
             dataset_sink_mode = True
         print("Start train SSD, the first epoch will be slower because of the graph compilation.")
         model.train(args_opt.epoch_size, dataset, callbacks=callback, dataset_sink_mode=dataset_sink_mode)
+
 
 if __name__ == '__main__':
     main()
