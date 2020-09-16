@@ -27,8 +27,10 @@ int main() {
   // TorchScript models require a List[IValue] as input
   std::vector<torch::jit::IValue> inputs;
 
-  // Demonet accepts a Tensor as main input
-  torch::Tensor images = torch::rand({1, 3, 320, 320});
+  // Demonet accepts a List[Tensor] as main input
+  std::vector<torch::Tensor> images;
+  images.push_back(torch::rand({3, 320, 320}));
+  images.push_back(torch::rand({3, 256, 275}));
 
   inputs.push_back(images);
   auto output = module.forward(inputs);
@@ -41,12 +43,14 @@ int main() {
     module.to(torch::kCUDA);
 
     // Add GPU inputs
+    images.clear();
     inputs.clear();
 
-    images = images.to(torch::kCUDA);
+    torch::TensorOptions options = torch::TensorOptions{torch::kCUDA};
+    images.push_back(torch::rand({3, 256, 275}, options));
+    images.push_back(torch::rand({3, 256, 275}, options));
 
     inputs.push_back(images);
-
     auto output = module.forward(inputs);
 
     std::cout << "ok" << std::endl;

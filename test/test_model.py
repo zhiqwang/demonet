@@ -7,8 +7,6 @@ from models.prior_box import AnchorGenerator
 from models.box_head import MultiBoxLiteHead, PostProcess, SetCriterion
 from models.generalized_ssd import GeneralizedSSD
 
-from util.misc import nested_tensor_from_tensor_list
-
 
 class ModelTester(unittest.TestCase):
 
@@ -80,10 +78,10 @@ class ModelTester(unittest.TestCase):
         model.eval()
         scripted_model.eval()
 
-        x = nested_tensor_from_tensor_list([torch.rand(3, 320, 320), torch.rand(3, 320, 320)])
+        input_list = [torch.rand(3, 320, 320), torch.rand(3, 320, 320)]
 
-        out = model(x)
-        out_script = scripted_model(x)[1]
+        out = model(input_list)
+        out_script = scripted_model(input_list)[1]
         self.assertTrue(out[0]["scores"].equal(out_script[0]["scores"]))
         self.assertTrue(out[0]["labels"].equal(out_script[0]["labels"]))
         self.assertTrue(out[0]["boxes"].equal(out_script[0]["boxes"]))

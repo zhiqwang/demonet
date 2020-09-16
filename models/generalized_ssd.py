@@ -7,7 +7,7 @@ import warnings
 import torch
 from torch import nn, Tensor
 
-from util.misc import NestedTensor, nested_tensor_from_tensor_list
+from util.misc import nested_tensor_from_tensor_list
 
 from torch.jit.annotations import List, Dict, Optional
 
@@ -46,7 +46,7 @@ class GeneralizedSSD(nn.Module):
 
     def forward(
         self,
-        samples: NestedTensor,
+        samples_list: List[Tensor],
         target_sizes: Optional[Tensor] = None,
     ):
         """
@@ -60,8 +60,7 @@ class GeneralizedSSD(nn.Module):
                 During testing, it returns list[BoxList] contains additional fields
                 like `scores`, `labels` and `mask` (for Mask R-CNN models).
         """
-        if isinstance(samples, (list, torch.Tensor)):
-            samples = nested_tensor_from_tensor_list(samples)
+        samples = nested_tensor_from_tensor_list(samples_list)
         features = self.backbone(samples)
 
         priors = self.prior_generator(features)  # BoxMode: XYWHA_REL
