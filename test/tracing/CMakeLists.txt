@@ -7,8 +7,6 @@ include_directories( ${OpenCV_INCLUDE_DIRS} )
 find_package(Torch REQUIRED)
 find_package(TorchVision REQUIRED)
 
-include_directories(${PROJECT_SOURCE_DIR}/csrc)
-
 # This due to some headers importing Python.h
 find_package(Python3 COMPONENTS Development)
 
