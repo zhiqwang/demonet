@@ -1,6 +1,6 @@
 # 👿 De Monet - All of Object Detection
 
-![Test Python](https://github.com/vanillapi/demonet/workflows/Test%20Python/badge.svg)
+![Test Python](https://github.com/vanillapi/demonet/workflows/build/badge.svg)
 
 PyTorch training code and models reimplentation for object detection as described in [Liu et al. (2015), SSD: Single Shot MultiBox Detector](https://arxiv.org/abs/1512.02325). *Currently work in process, very pleasure for suggestion and cooperation.*
 
