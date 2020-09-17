@@ -8,8 +8,9 @@ PyTorch training code and models reimplentation for object detection as describe
 
 ## 🆕 What's New
 
-- **July 22, 2020:** DEMONET have fully support for TorchScript.
-- **July 25, 2020:** DEMONET have fully support for onnx.
+- **July 22, 2020:** DEMONET have support for `TorchScript`.
+- **July 25, 2020:** DEMONET can do inference using `onnxruntime`.
+- **September 18, 2020:** DEMONET can do inference using `libtorch` cpp interface. 
 
 ## 🛠 Usage
 
