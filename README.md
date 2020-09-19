@@ -1,16 +1,17 @@
 # 👿 De Monet - All of Object Detection
 
-![Test Python](https://github.com/vanillapi/demonet/workflows/build/badge.svg)
+[![build](https://github.com/zhiqwang/demonet/workflows/build/badge.svg)](https://github.com/zhiqwang/demonet/actions?query=workflow%3Abuild)
 
 PyTorch training code and models reimplentation for object detection as described in [Liu et al. (2015), SSD: Single Shot MultiBox Detector](https://arxiv.org/abs/1512.02325). *Currently work in process, very pleasure for suggestion and cooperation.*
 
 ![Example of SSD Lite with mobilenet v2 backbone](.github/demo.png)
 
-## 🆕 What's New
+## 🆕 What's New and Development Plans
 
-- **July 22, 2020:** DEMONET have support for `TorchScript`.
-- **July 25, 2020:** DEMONET can do inference using `onnxruntime`.
-- **September 18, 2020:** DEMONET can do inference using `libtorch` cpp interface. 
+- [x] Support exporting to `TorchScript` model. *Jul. 22, 2020.*
+- [x] Support exporting to `onnx`, and doing inference using `onnxruntime`. *Jul. 25, 2020.*
+- [x] Support doing inference using `libtorch` cpp interface. *Sep. 18, 2020.*
+- [ ] Add more fetures ...
 
 ## 🛠 Usage
 
