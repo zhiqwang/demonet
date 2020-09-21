@@ -5,17 +5,16 @@ Misc functions, including distributed helpers.
 Mostly copy-paste from torchvision references.
 """
 import os
-
+import subprocess
 import time
 from collections import defaultdict, deque
 import datetime
 import pickle
+from typing import Optional, List
 
 import torch
 import torch.distributed as dist
 from torch import Tensor
-
-from torch.jit.annotations import List, Optional, Tuple
 
 # needed due to empty tensor bug in pytorch and torchvision 0.5
 import torchvision
@@ -246,15 +245,24 @@ class MetricLogger(object):
             header, total_time_str, total_time / len(iterable)))
 
 
-def warmup_lr_scheduler(optimizer, warmup_iters, warmup_factor):
+def get_sha():
+    cwd = os.path.dirname(os.path.abspath(__file__))
 
-    def f(x):
-        if x >= warmup_iters:
-            return 1
-        alpha = float(x) / warmup_iters
-        return warmup_factor * (1 - alpha) + alpha
-
-    return torch.optim.lr_scheduler.LambdaLR(optimizer, f)
+    def _run(command):
+        return subprocess.check_output(command, cwd=cwd).decode('ascii').strip()
+    sha = 'N/A'
+    diff = "clean"
+    branch = 'N/A'
+    try:
+        sha = _run(['git', 'rev-parse', 'HEAD'])
+        subprocess.check_output(['git', 'diff'], cwd=cwd)
+        diff = _run(['git', 'diff-index', 'HEAD'])
+        diff = "has uncommited changes" if diff else "clean"
+        branch = _run(['git', 'rev-parse', '--abbrev-ref', 'HEAD'])
+    except Exception:
+        pass
+    message = f"sha: {sha}, status: {diff}, branch: {branch}"
+    return message
 
 
 def collate_fn(batch):
@@ -272,41 +280,58 @@ def _max_by_axis(the_list):
     return maxes
 
 
+class NestedTensor(object):
+    def __init__(self, tensors, mask: Optional[Tensor]):
+        self.tensors = tensors
+        self.mask = mask
+
+    def to(self, device):
+        # type: (Device) -> NestedTensor # noqa
+        cast_tensor = self.tensors.to(device)
+        mask = self.mask
+        if mask is not None:
+            assert mask is not None
+            cast_mask = mask.to(device)
+        else:
+            cast_mask = None
+        return NestedTensor(cast_tensor, cast_mask)
+
+    def decompose(self):
+        return self.tensors, self.mask
+
+    def __repr__(self):
+        return str(self.tensors)
+
+
 def nested_tensor_from_tensor_list(tensor_list: List[Tensor]):
     # TODO make this more general
     if tensor_list[0].ndim == 3:
         if torchvision._is_tracing():
-            # _nested_tensor_from_tensor_list() does not export well to ONNX
+            # nested_tensor_from_tensor_list() does not export well to ONNX
             # call _onnx_nested_tensor_from_tensor_list() instead
-            tensor, mask = _onnx_nested_tensor_from_tensor_list(tensor_list)
-        else:
-            tensor, mask = _nested_tensor_from_tensor_list(tensor_list)
+            return _onnx_nested_tensor_from_tensor_list(tensor_list)
+
+        # TODO make it support different-sized images
+        max_size = _max_by_axis([list(img.shape) for img in tensor_list])
+        # min_size = tuple(min(s) for s in zip(*[img.shape for img in tensor_list]))
+        batch_shape = [len(tensor_list)] + max_size
+        b, c, h, w = batch_shape
+        dtype = tensor_list[0].dtype
+        device = tensor_list[0].device
+        tensor = torch.zeros(batch_shape, dtype=dtype, device=device)
+        mask = torch.ones((b, h, w), dtype=torch.bool, device=device)
+        for img, pad_img, m in zip(tensor_list, tensor, mask):
+            pad_img[: img.shape[0], : img.shape[1], : img.shape[2]].copy_(img)
+            m[: img.shape[1], :img.shape[2]] = False
     else:
         raise ValueError('not supported')
     return NestedTensor(tensor, mask)
 
 
-def _nested_tensor_from_tensor_list(tensor_list: List[Tensor]) -> Tuple[Tensor, Tensor]:
-    # TODO make it support different-sized images
-    max_size = _max_by_axis([list(img.shape) for img in tensor_list])
-    # min_size = tuple(min(s) for s in zip(*[img.shape for img in tensor_list]))
-    batch_shape = [len(tensor_list)] + max_size
-    b, c, h, w = batch_shape
-    dtype = tensor_list[0].dtype
-    device = tensor_list[0].device
-    tensor = torch.zeros(batch_shape, dtype=dtype, device=device)
-    mask = torch.ones((b, h, w), dtype=torch.bool, device=device)
-    for img, pad_img, m in zip(tensor_list, tensor, mask):
-        pad_img[: img.shape[0], : img.shape[1], : img.shape[2]].copy_(img)
-        m[: img.shape[1], :img.shape[2]] = False
-
-    return tensor, mask
-
-
 # _onnx_nested_tensor_from_tensor_list() is an implementation of
-# _nested_tensor_from_tensor_list() that is supported by ONNX tracing.
+# nested_tensor_from_tensor_list() that is supported by ONNX tracing.
 @torch.jit.unused
-def _onnx_nested_tensor_from_tensor_list(tensor_list: List[Tensor]) -> Tuple[Tensor, Tensor]:
+def _onnx_nested_tensor_from_tensor_list(tensor_list: List[Tensor]) -> NestedTensor:
     max_size = []
     for i in range(tensor_list[0].dim()):
         max_size_i = torch.max(torch.stack([img.shape[i] for img in tensor_list]).to(torch.float32)).to(torch.int64)
@@ -331,30 +356,7 @@ def _onnx_nested_tensor_from_tensor_list(tensor_list: List[Tensor]) -> Tuple[Ten
     tensor = torch.stack(padded_imgs)
     mask = torch.stack(padded_masks)
 
-    return tensor, mask
-
-
-class NestedTensor:
-    def __init__(self, tensors: Tensor, mask: Tensor):
-        self.tensors = tensors
-        self.mask = mask
-
-    def to(self, device):
-        # type: (Device) -> NestedTensor  # noqa
-        cast_tensor = self.tensors.to(device)
-        mask = self.mask
-        if mask is not None:
-            assert mask is not None
-            cast_mask = mask.to(device)
-        else:
-            cast_mask = None
-        return NestedTensor(cast_tensor, cast_mask)
-
-    def decompose(self):
-        return self.tensors, self.mask
-
-    def __repr__(self):
-        return str(self.tensors)
+    return NestedTensor(tensor, mask=mask)
 
 
 def setup_for_distributed(is_master):

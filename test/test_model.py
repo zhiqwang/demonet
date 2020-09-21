@@ -7,6 +7,10 @@ from models.prior_box import AnchorGenerator
 from models.box_head import MultiBoxLiteHead, PostProcess, SetCriterion
 from models.generalized_ssd import GeneralizedSSD
 
+from util.misc import nested_tensor_from_tensor_list
+
+from .utils import WrappedDemonet
+
 
 class ModelTester(unittest.TestCase):
 
@@ -78,10 +82,31 @@ class ModelTester(unittest.TestCase):
         model.eval()
         scripted_model.eval()
 
-        input_list = [torch.rand(3, 320, 320), torch.rand(3, 320, 320)]
+        x = nested_tensor_from_tensor_list([torch.rand(3, 320, 320), torch.rand(3, 320, 320)])
 
-        out = model(input_list)
-        out_script = scripted_model(input_list)[1]
+        out = model(x)
+        out_script = scripted_model(x)[1]
+        self.assertTrue(out[0]["scores"].equal(out_script[0]["scores"]))
+        self.assertTrue(out[0]["labels"].equal(out_script[0]["labels"]))
+        self.assertTrue(out[0]["boxes"].equal(out_script[0]["boxes"]))
+
+    def test_wrapped_ssd_script(self):
+        backbone = self._init_test_backbone()
+        prior_generator = self._init_test_prior_generator()
+        multibox_head = self._init_test_multibox_head()
+        post_process = self._init_test_postprocessors()
+
+        model = GeneralizedSSD(backbone, prior_generator, multibox_head, post_process)
+        wrapped_model = WrappedDemonet(model)
+        scripted_model = torch.jit.script(wrapped_model)
+
+        wrapped_model.eval()
+        scripted_model.eval()
+
+        x = [torch.rand(3, 320, 320), torch.rand(3, 320, 320)]
+
+        out = wrapped_model(x)
+        out_script = scripted_model(x)[1]
         self.assertTrue(out[0]["scores"].equal(out_script[0]["scores"]))
         self.assertTrue(out[0]["labels"].equal(out_script[0]["labels"]))
         self.assertTrue(out[0]["boxes"].equal(out_script[0]["boxes"]))

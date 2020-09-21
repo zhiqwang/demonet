@@ -1,14 +1,14 @@
-import os
-
 import torch
 
 from hubconf import ssd_lite_mobilenet_v2
+from test.utils import WrappedDemonet
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-ASSETS = os.path.dirname(os.path.dirname(HERE))
 
-model = ssd_lite_mobilenet_v2(pretrained=False)
-model.eval()
+if __name__ == "__main__":
 
-traced_model = torch.jit.script(model)
-traced_model.save("./test/tracing/ssd_lite_mobilenet_v2.pt")
+    model = ssd_lite_mobilenet_v2(pretrained=False)
+    wrapped_model = WrappedDemonet(model)
+    wrapped_model.eval()
+
+    traced_model = torch.jit.script(wrapped_model)
+    traced_model.save("./test/tracing/ssd_lite_mobilenet_v2.pt")

@@ -7,7 +7,7 @@ import warnings
 import torch
 from torch import nn, Tensor
 
-from util.misc import nested_tensor_from_tensor_list
+from util.misc import NestedTensor, nested_tensor_from_tensor_list
 
 from torch.jit.annotations import List, Dict, Optional
 
@@ -46,21 +46,21 @@ class GeneralizedSSD(nn.Module):
 
     def forward(
         self,
-        samples_list: List[Tensor],
+        samples: NestedTensor,
         target_sizes: Optional[Tensor] = None,
     ):
         """
         Arguments:
             samples (NestedTensor): Expects a NestedTensor, which consists of:
                - samples.tensor: batched images, of shape [batch_size x 3 x H x W]
-
         Returns:
             result (list[BoxList] or dict[Tensor]): the output from the model.
                 During training, it returns a dict[Tensor] which contains the losses.
                 During testing, it returns list[BoxList] contains additional fields
                 like `scores`, `labels` and `mask` (for Mask R-CNN models).
         """
-        samples = nested_tensor_from_tensor_list(samples_list)
+        if isinstance(samples, (list, torch.Tensor)):
+            samples = nested_tensor_from_tensor_list(samples)
         features = self.backbone(samples)
 
         priors = self.prior_generator(features)  # BoxMode: XYWHA_REL
