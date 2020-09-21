@@ -1,7 +1,7 @@
 # Copyright (c) 2020, Zhiqiang Wang. All Rights Reserved.
 # GH actions
 
-name: build
+name: Test
 
 on:
   push:
@@ -10,7 +10,7 @@ on:
     branches: [ master ]
 
 jobs:
-  build:
+  TestCppPython:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:

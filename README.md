@@ -1,6 +1,6 @@
 # 👿 De Monet - All of Object Detection
 
-[![build](https://github.com/zhiqwang/demonet/workflows/build/badge.svg)](https://github.com/zhiqwang/demonet/actions?query=workflow%3Abuild)
+[![Test](https://github.com/zhiqwang/demonet/workflows/Test/badge.svg)](https://github.com/zhiqwang/demonet/actions?query=workflow%3ATest)
 
 PyTorch training code and models reimplentation for object detection as described in [Liu et al. (2015), SSD: Single Shot MultiBox Detector](https://arxiv.org/abs/1512.02325). *Currently work in process, very pleasure for suggestion and cooperation.*
 
@@ -66,6 +66,7 @@ We provide [`ssd_lite_mobilenet_v2`](models/ssd_mobilenet.py) ~~pretrained model
   AP for train = 0.8191
   AP for tvmonitor = 0.6545
   ```
+
 </details>
 
 ## 🧗 Data Preparation
@@ -147,6 +148,7 @@ When you are using PASCAL VOC format, we expect the directory structure to be th
       --batch-size 32 \
       --test-only
   ```
+
 </details>
 
 ## 🎓 Acknowledgement
