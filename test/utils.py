@@ -1,5 +1,5 @@
 from torch import nn, Tensor
-from typing import List
+from typing import List, Optional
 
 from util.misc import nested_tensor_from_tensor_list
 
@@ -9,6 +9,6 @@ class WrappedDemonet(nn.Module):
         super().__init__()
         self.model = model
 
-    def forward(self, inputs: List[Tensor]):
+    def forward(self, inputs: List[Tensor], target_sizes: Optional[Tensor] = None):
         sample = nested_tensor_from_tensor_list(inputs)
-        return self.model(sample)
+        return self.model(sample, target_sizes)
