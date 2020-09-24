@@ -6,7 +6,7 @@ from torch import nn, Tensor
 import torch.nn.functional as F
 
 import torchvision
-from torchvision.ops.boxes import box_iou, batched_nms
+from torchvision.ops.boxes import box_iou, batched_nms, remove_small_boxes
 
 from . import _utils as det_utils
 
@@ -370,11 +370,11 @@ class PostProcess(nn.Module):
             labels = labels.reshape(-1)
 
             # remove low scoring boxes
-            inds = torch.nonzero(scores > self.score_thresh).squeeze(1)
+            inds = torch.where(scores > self.score_thresh)[0]
             boxes, scores, labels = boxes[inds], scores[inds], labels[inds]
 
             # remove empty boxes
-            keep = det_utils.remove_small_boxes(boxes, min_size=1e-2)
+            keep = remove_small_boxes(boxes, min_size=1e-2)
             boxes, scores, labels = boxes[keep], scores[keep], labels[keep]
 
             # non-maximum suppression, independently done per level

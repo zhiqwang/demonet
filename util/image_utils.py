@@ -4,6 +4,8 @@ import cv2
 from IPython import display
 from PIL import Image
 
+import torch
+
 
 def load_image(
     image_name,
@@ -46,7 +48,7 @@ def cv2_imshow(a):
 
 
 def select_top_predictions(predictions, threshold):
-    idx = (predictions['scores'] > threshold).nonzero(as_tuple=False).squeeze(1)
+    idx = torch.where(predictions['scores'] > threshold)[0]
     new_predictions = {}
     for k, v in predictions.items():
         new_predictions[k] = v[idx]

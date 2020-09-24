@@ -134,19 +134,3 @@ class BoxCoder(object):
         boxes = locations_to_boxes(locations, priors, self.variances)
         boxes = box_cxcywh_to_xyxy(boxes)
         return boxes
-
-
-def remove_small_boxes(boxes: Tensor, min_size: float) -> Tensor:
-    """
-    Remove boxes which contains at least one side smaller than min_size.
-    Arguments:
-        boxes (Tensor[N, 4]): boxes in (x1, y1, x2, y2) format
-        min_size (float): minimum size
-    Returns:
-        keep (Tensor[K]): indices of the boxes that have both sides
-            larger than min_size
-    """
-    ws, hs = boxes[:, 2] - boxes[:, 0], boxes[:, 3] - boxes[:, 1]
-    keep = (ws >= min_size) & (hs >= min_size)
-    keep = keep.nonzero().squeeze(1)
-    return keep
