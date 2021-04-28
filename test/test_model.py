@@ -110,7 +110,3 @@ class ModelTester(unittest.TestCase):
         self.assertTrue(out[0]["scores"].equal(out_script[0]["scores"]))
         self.assertTrue(out[0]["labels"].equal(out_script[0]["labels"]))
         self.assertTrue(out[0]["boxes"].equal(out_script[0]["boxes"]))
-
-
-if __name__ == "__main__":
-    unittest.main()
