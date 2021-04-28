@@ -2,12 +2,12 @@ import unittest
 
 import torch
 
-from models.backbone import MobileNetWithExtraBlocks
-from models.prior_box import AnchorGenerator
-from models.box_head import MultiBoxLiteHead, PostProcess, SetCriterion
-from models.generalized_ssd import GeneralizedSSD
+from demonet.models.backbone import MobileNetWithExtraBlocks
+from demonet.models.prior_box import AnchorGenerator
+from demonet.models.box_head import MultiBoxLiteHead, PostProcess, SetCriterion
+from demonet.models.generalized_ssd import GeneralizedSSD
 
-from util.misc import nested_tensor_from_tensor_list
+from demonet.util.misc import nested_tensor_from_tensor_list
 
 from .utils import WrappedDemonet
 

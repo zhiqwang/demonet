@@ -40,25 +40,25 @@ jobs:
     - name: Test with pytest
       run: |
         pytest test
-    - name: Build TorchVision
-      run: |
-        export TORCH_PATH=$(dirname $(python -c "import torch; print(torch.__file__)"))
-        cd ..
-        git clone https://github.com/pytorch/vision.git vision
-        cd vision
-        mkdir build && cd build
-        cmake .. -DTorch_DIR=$TORCH_PATH/share/cmake/Torch
-        make -j4
-        sudo make install
-    - name: Test libtorch tracing
-      run: |
-        python -m test.tracing.trace_model
-        export TORCH_PATH=$(dirname $(python -c "import torch; print(torch.__file__)"))
-        export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$TORCH_PATH/lib/
-        cd test/tracing
-        mkdir build && cd build
-        cmake .. -DTorch_DIR=$TORCH_PATH/share/cmake/Torch
-        make
-        mv ../ssd_lite_mobilenet_v2.pt ./
-        echo ">> Test libtorch tracing"
-        ./test_demonet_tracing
+    # - name: Build TorchVision
+    #   run: |
+    #     export TORCH_PATH=$(dirname $(python -c "import torch; print(torch.__file__)"))
+    #     cd ..
+    #     git clone https://github.com/pytorch/vision.git vision
+    #     cd vision
+    #     mkdir build && cd build
+    #     cmake .. -DTorch_DIR=$TORCH_PATH/share/cmake/Torch
+    #     make -j4
+    #     sudo make install
+    # - name: Test libtorch tracing
+    #   run: |
+    #     python -m test.tracing.trace_model
+    #     export TORCH_PATH=$(dirname $(python -c "import torch; print(torch.__file__)"))
+    #     export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$TORCH_PATH/lib/
+    #     cd test/tracing
+    #     mkdir build && cd build
+    #     cmake .. -DTorch_DIR=$TORCH_PATH/share/cmake/Torch
+    #     make
+    #     mv ../ssd_lite_mobilenet_v2.pt ./
+    #     echo ">> Test libtorch tracing"
+    #     ./test_demonet_tracing

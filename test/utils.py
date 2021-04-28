@@ -1,7 +1,7 @@
 from torch import nn, Tensor
 from typing import List, Optional
 
-from util.misc import nested_tensor_from_tensor_list
+from demonet.util.misc import nested_tensor_from_tensor_list
 
 
 class WrappedDemonet(nn.Module):
