@@ -2,8 +2,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from modules.peleenet import BasicConv2d, peleenet_v1
-from util.misc import is_main_process
+from .peleenet import BasicConv2d, peleenet_v1
+from ..util.misc import is_main_process
 
 from .backbone import BackboneBase
 from .multibox_head import MultiBoxHeads

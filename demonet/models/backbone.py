@@ -8,7 +8,7 @@ from torch import nn, Tensor
 from torchvision.models.mobilenet import InvertedResidual, mobilenet_v2
 from torchvision.models._utils import IntermediateLayerGetter
 
-from util.misc import NestedTensor
+from ..util.misc import NestedTensor
 
 from torch.jit.annotations import List
 

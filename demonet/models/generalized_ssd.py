@@ -7,7 +7,7 @@ import warnings
 import torch
 from torch import nn, Tensor
 
-from util.misc import NestedTensor, nested_tensor_from_tensor_list
+from ..util.misc import NestedTensor, nested_tensor_from_tensor_list
 
 from torch.jit.annotations import List, Dict, Optional
 
