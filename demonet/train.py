@@ -10,7 +10,7 @@ from pathlib import Path
 import torch
 from torch.utils.data import DataLoader, DistributedSampler
 
-import .util.misc as utils
+from .util import misc as utils
 
 from .data import build_dataset, get_coco_api_from_dataset
 from .models import build_model
