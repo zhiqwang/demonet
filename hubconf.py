@@ -1,7 +1,7 @@
 import torch
 
-from models.backbone import MobileNetWithExtraBlocks
-from models.ssd_mobilenet import SSDLiteWithMobileNetV2
+from demonet.models.backbone import MobileNetWithExtraBlocks
+from demonet.models.ssd_mobilenet import SSDLiteWithMobileNetV2
 
 dependencies = ["torch", "torchvision"]
 

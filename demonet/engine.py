@@ -6,9 +6,8 @@ import torch
 
 import torchvision.models
 
-from datasets.coco_eval import CocoEvaluator
-
-import util.misc as utils
+from .data.coco_eval import CocoEvaluator
+from .util import misc as utils
 
 
 def train_one_epoch(model, criterion, optimizer, data_loader, device, epoch, print_freq):

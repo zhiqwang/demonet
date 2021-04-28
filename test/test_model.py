@@ -2,12 +2,12 @@ import unittest
 
 import torch
 
-from models.backbone import MobileNetWithExtraBlocks
-from models.prior_box import AnchorGenerator
-from models.box_head import MultiBoxLiteHead, PostProcess, SetCriterion
-from models.generalized_ssd import GeneralizedSSD
+from demonet.models.backbone import MobileNetWithExtraBlocks
+from demonet.models.prior_box import AnchorGenerator
+from demonet.models.box_head import MultiBoxLiteHead, PostProcess, SetCriterion
+from demonet.models.generalized_ssd import GeneralizedSSD
 
-from util.misc import nested_tensor_from_tensor_list
+from demonet.util.misc import nested_tensor_from_tensor_list
 
 from .utils import WrappedDemonet
 
@@ -110,7 +110,3 @@ class ModelTester(unittest.TestCase):
         self.assertTrue(out[0]["scores"].equal(out_script[0]["scores"]))
         self.assertTrue(out[0]["labels"].equal(out_script[0]["labels"]))
         self.assertTrue(out[0]["boxes"].equal(out_script[0]["boxes"]))
-
-
-if __name__ == "__main__":
-    unittest.main()

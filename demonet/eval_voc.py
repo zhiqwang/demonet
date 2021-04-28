@@ -6,11 +6,11 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader
 
-from models import build_model
-from util.misc import MetricLogger, collate_fn
+from .models import build_model
+from .util.misc import MetricLogger, collate_fn
 
-from datasets import build_dataset
-from datasets.voc_eval import _write_voc_results_file, _do_python_eval
+from .data import build_dataset
+from .data.voc_eval import _write_voc_results_file, _do_python_eval
 
 
 def main(args):

@@ -1,13 +1,48 @@
-# model
+# Custom
 data-bin
 checkpoints
 logs
+lightning_logs
 *.ipynb
 runs
 
 # macOS dir files
 .DS_Store
-## General
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
 
 # Compiled Object files
 *.slo
@@ -65,6 +100,5 @@ doxygen
 *.sst
 *.ldb
 LOCK
-LOG*
 CURRENT
 MANIFEST-*

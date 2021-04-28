@@ -131,7 +131,3 @@ class ONNXExporterTester(unittest.TestCase):
             # dynamic_axes={"inputs": [0, 1, 2, 3], "outputs": [0, 1, 2, 3]},
             tolerate_small_mismatch=True,
         )
-
-
-if __name__ == "__main__":
-    unittest.main()

@@ -5,7 +5,7 @@ from torch import Tensor
 
 from torch.jit.annotations import Tuple
 
-from util.box_ops import box_cxcywh_to_xyxy, box_xyxy_to_cxcywh
+from ..util.box_ops import box_cxcywh_to_xyxy, box_xyxy_to_cxcywh
 
 
 class BalancedPositiveNegativeSampler(object):
