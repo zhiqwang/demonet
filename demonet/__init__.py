@@ -2,7 +2,7 @@
 
 from demonet import models
 from demonet import data
-from demonet import utils
+from demonet import util
 
 
 __version__ = "0.2.0a0"
