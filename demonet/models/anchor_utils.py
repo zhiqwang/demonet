@@ -1,8 +1,10 @@
-# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
-# Modified by Zhiqiang Wang (zhiqwang@outlook.com)
+import math
+
 import torch
 from torch import nn, Tensor
 from torch.jit.annotations import List, Optional, Dict, Tuple
+
+from typing import List, Optional
 
 
 class AnchorGenerator(nn.Module):

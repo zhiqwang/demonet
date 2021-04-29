@@ -3,7 +3,7 @@ import unittest
 import torch
 
 from demonet.models.backbone import MobileNetWithExtraBlocks
-from demonet.models.prior_box import AnchorGenerator
+from demonet.models.anchor_utils import AnchorGenerator
 from demonet.models.box_head import MultiBoxLiteHead, PostProcess, SetCriterion
 from demonet.models.generalized_ssd import GeneralizedSSD
 
