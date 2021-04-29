@@ -4,7 +4,7 @@ DEMONET model and criterion classes.
 """
 
 from .backbone import build_backbone
-from .prior_box import AnchorGenerator
+from .anchor_utils import AnchorGenerator
 from .box_head import MultiBoxLiteHead, PostProcess, SetCriterion
 from .generalized_ssd import GeneralizedSSD
 
