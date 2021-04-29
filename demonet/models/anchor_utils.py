@@ -1,10 +1,7 @@
-import math
-
 import torch
 from torch import nn, Tensor
-from torch.jit.annotations import List, Optional, Dict, Tuple
 
-from typing import List, Optional
+from typing import List, Optional, Dict, Tuple
 
 
 class AnchorGenerator(nn.Module):
@@ -78,13 +75,21 @@ class AnchorGenerator(nn.Module):
         assert len(ratios) == len(scale_ratios)
         return tuple(tuple(r) for r in ratios), tuple(tuple(s) for s in scale_ratios)
 
-    # TODO: https://github.com/pytorch/pytorch/issues/26792
-    # For every (aspect_ratios, scales) combination, output a zero-centered anchor
-    #   with those values in XYWHA BoxMode.
-    # (scales, aspect_ratios) are usually an element of zip(self.scales, self.aspect_ratios)
-    # This method assumes aspect ratio = height / width for an anchor.
-    def generate_anchors(self, scales, aspect_ratios, scale_ratios, dtype=torch.float32, device="cpu"):
-        # type: (List[int], List[float], List[float], int, Device) -> Tensor  # noqa: F821
+    def generate_anchors(
+        self,
+        scales: List[int],
+        aspect_ratios: List[float],
+        scale_ratios: List[float],
+        dtype: torch.dtype = torch.float32,
+        device: torch.device = "cpu",
+    ) -> Tensor:
+        """
+        TODO: https://github.com/pytorch/pytorch/issues/26792
+        For every (aspect_ratios, scales) combination, output a zero-centered anchor
+          with those values in XYWHA BoxMode.
+        (scales, aspect_ratios) are usually an element of zip(self.scales, self.aspect_ratios)
+        This method assumes aspect ratio = height / width for an anchor.
+        """
         scales = torch.as_tensor(scales, dtype=dtype, device=device)
         aspect_ratios = torch.as_tensor(aspect_ratios, dtype=dtype, device=device)
         scale_ratios = torch.sqrt(torch.as_tensor(scale_ratios, dtype=dtype, device=device))
@@ -98,8 +103,7 @@ class AnchorGenerator(nn.Module):
         base_anchors = torch.stack([zeros, zeros, ws, hs], dim=1)
         return base_anchors
 
-    def set_cell_anchors(self, dtype, device):
-        # type: (int, Device) -> None  # noqa: F821
+    def set_cell_anchors(self, dtype: torch.dtype, device: torch.device):
         if self.cell_anchors is not None:
             cell_anchors = self.cell_anchors
             assert cell_anchors is not None
