@@ -2,6 +2,7 @@
 """
 DEMONET model and criterion classes.
 """
+from yolort.models.transform import GeneralizedYOLOTransform
 
 from .backbone import build_backbone
 from .anchor_utils import AnchorGenerator
@@ -37,8 +38,9 @@ class SSDLiteWithMobileNetV2(GeneralizedSSD):
         prior_generator = AnchorGenerator(image_size, aspect_ratios, min_sizes, max_sizes, clip)
         multibox_head = MultiBoxLiteHead(hidden_dims, num_anchors, num_classes)
         post_process = PostProcess(variances, score_thresh, nms_thresh, detections_per_img)
+        transform = GeneralizedYOLOTransform(image_size, image_size)
 
-        super().__init__(backbone, prior_generator, multibox_head, post_process)
+        super().__init__(backbone, prior_generator, multibox_head, post_process, transform)
 
 
 def build(args):

@@ -8,8 +8,6 @@ from torch import nn, Tensor
 from torchvision.models.mobilenet import mobilenet_v2
 from torchvision.models._utils import IntermediateLayerGetter
 
-from ..util.misc import NestedTensor
-
 from typing import Callable, Optional, List
 
 
@@ -31,8 +29,8 @@ class BackboneBase(nn.Module):
         self.body = IntermediateLayerGetter(backbone, return_layers=return_layers_backbone)
         self.extra_blocks = IntermediateLayerGetter(extra_blocks, return_layers=return_layers_extra_blocks)
 
-    def forward(self, tensor_list: NestedTensor):
-        xs_body = self.body(tensor_list.tensors)
+    def forward(self, xs):
+        xs_body = self.body(xs)
         out: List[Tensor] = []
 
         for name, x in xs_body.items():
