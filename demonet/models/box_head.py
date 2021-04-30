@@ -6,7 +6,7 @@ from torch import nn, Tensor
 import torch.nn.functional as F
 
 import torchvision
-from torchvision.ops.boxes import box_iou, batched_nms, remove_small_boxes
+from torchvision.ops import boxes as box_ops
 
 from . import _utils as det_utils
 
@@ -207,7 +207,7 @@ class SetCriterion(nn.Module):
         labels = []
         for gt_boxes_in_image, gt_labels_in_image in zip(gt_boxes, gt_labels):
 
-            match_quality_matrix = box_iou(gt_boxes_in_image, priors)  # num_targets x num_priors
+            match_quality_matrix = box_ops.box_iou(gt_boxes_in_image, priors)  # num_targets x num_priors
             if match_quality_matrix.numel() == 0:
                 # empty targets or proposals not supported during training
                 if match_quality_matrix.shape[0] == 0:
@@ -325,6 +325,7 @@ class PostProcess(nn.Module):
         pred_logits: Tensor,
         pred_boxes: Tensor,
         priors: Tensor,
+        image_shapes: List[Tuple[int, int]],
     ) -> List[Dict[str, Tensor]]:
         """ Perform the computation. At test time, postprocess_detections is the final layer of SSD.
         Decode location preds, apply non-maximum suppression to location predictions based on conf
@@ -343,9 +344,9 @@ class PostProcess(nn.Module):
         out_scores = F.softmax(pred_logits, -1)
 
         results = torch.jit.annotate(List[Dict[str, Tensor]], [])
-        for boxes, scores in zip(out_boxes, out_scores):
+        for boxes, scores, image_shape in zip(out_boxes, out_scores, image_shapes):
             # For each class, perform nms
-
+            boxes = box_ops.clip_boxes_to_image(boxes, image_shape)
             boxes = torch.cat([boxes for _ in range(num_classes - 1)], dim=1)
 
             # create labels for each prediction
@@ -366,11 +367,11 @@ class PostProcess(nn.Module):
             boxes, scores, labels = boxes[inds], scores[inds], labels[inds]
 
             # remove empty boxes
-            keep = remove_small_boxes(boxes, min_size=1e-2)
+            keep = box_ops.remove_small_boxes(boxes, min_size=1e-2)
             boxes, scores, labels = boxes[keep], scores[keep], labels[keep]
 
             # non-maximum suppression, independently done per level
-            keep = batched_nms(boxes, scores, labels, self.nms_thresh)
+            keep = box_ops.batched_nms(boxes, scores, labels, self.nms_thresh)
             # keep only topk scoring predictions
             keep = keep[:self.detections_per_img]
             boxes, scores, labels = boxes[keep], scores[keep], labels[keep]

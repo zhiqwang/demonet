@@ -77,7 +77,7 @@ class GeneralizedSSD(nn.Module):
         if self.training:
             out_ssd = {'pred_logits': logits, 'pred_boxes': bbox_reg, 'priors': priors}
         else:
-            detections = self.post_process(logits, bbox_reg, priors)
+            detections = self.post_process(logits, bbox_reg, priors, samples.image_sizes)
             detections = self.transform.postprocess(detections, samples.image_sizes, original_image_sizes)
 
         if torch.jit.is_scripting():
