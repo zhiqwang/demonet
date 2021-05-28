@@ -7,9 +7,7 @@ import warnings
 import torch
 from torch import nn, Tensor
 
-from ..util.misc import NestedTensor, nested_tensor_from_tensor_list
-
-from torch.jit.annotations import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple
 
 
 class GeneralizedSSD(nn.Module):
@@ -28,12 +26,14 @@ class GeneralizedSSD(nn.Module):
         prior_generator: nn.Module,
         multibox_head: nn.Module,
         post_process: Optional[nn.Module],
+        transform: Optional[nn.Module],
     ):
         super().__init__()
         self.backbone = backbone
         self.prior_generator = prior_generator
         self.multibox_head = multibox_head
         self.post_process = post_process
+        self.transform = transform
         # used only on torchscript mode
         self._has_warned = False
 
@@ -44,34 +44,41 @@ class GeneralizedSSD(nn.Module):
 
         return detections
 
-    def forward(
-        self,
-        samples: NestedTensor,
-        target_sizes: Optional[Tensor] = None,
-    ):
+    def forward(self, inputs: List[Tensor]):
         """
-        Arguments:
-            samples (NestedTensor): Expects a NestedTensor, which consists of:
-               - samples.tensor: batched images, of shape [batch_size x 3 x H x W]
+        Args:
+            inputs (list[Tensor]): images to be processed
+            targets (list[Dict[Tensor]]): ground-truth boxes present in the image (optional)
+
         Returns:
             result (list[BoxList] or dict[Tensor]): the output from the model.
                 During training, it returns a dict[Tensor] which contains the losses.
                 During testing, it returns list[BoxList] contains additional fields
                 like `scores`, `labels` and `mask` (for Mask R-CNN models).
         """
-        if isinstance(samples, (list, torch.Tensor)):
-            samples = nested_tensor_from_tensor_list(samples)
-        features = self.backbone(samples)
+        # get the original image sizes
+        original_image_sizes: List[Tuple[int, int]] = []
+
+        if not self.training:
+            for img in inputs:
+                val = img.shape[-2:]
+                assert len(val) == 2
+                original_image_sizes.append((val[0], val[1]))
+        # Transform the input
+        samples, _ = self.transform(inputs, None)
+        # Compute the features
+        features = self.backbone(samples.tensors)
 
         priors = self.prior_generator(features)  # BoxMode: XYWHA_REL
         logits, bbox_reg = self.multibox_head(features)
         out_ssd = {}
-        detections = torch.jit.annotate(List[Dict[str, Tensor]], [])
+        detections: List[Dict[str, Tensor]] = []
 
         if self.training:
             out_ssd = {'pred_logits': logits, 'pred_boxes': bbox_reg, 'priors': priors}
         else:
-            detections = self.post_process(logits, bbox_reg, priors, target_sizes)
+            detections = self.post_process(logits, bbox_reg, priors, samples.image_sizes)
+            detections = self.transform.postprocess(detections, samples.image_sizes, original_image_sizes)
 
         if torch.jit.is_scripting():
             if not self._has_warned:

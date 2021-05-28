@@ -2,9 +2,10 @@
 """
 DEMONET model and criterion classes.
 """
+from torchvision.models.detection.transform import GeneralizedRCNNTransform
 
 from .backbone import build_backbone
-from .prior_box import AnchorGenerator
+from .anchor_utils import AnchorGenerator
 from .box_head import MultiBoxLiteHead, PostProcess, SetCriterion
 from .generalized_ssd import GeneralizedSSD
 
@@ -37,8 +38,9 @@ class SSDLiteWithMobileNetV2(GeneralizedSSD):
         prior_generator = AnchorGenerator(image_size, aspect_ratios, min_sizes, max_sizes, clip)
         multibox_head = MultiBoxLiteHead(hidden_dims, num_anchors, num_classes)
         post_process = PostProcess(variances, score_thresh, nms_thresh, detections_per_img)
+        transform = GeneralizedRCNNTransform(image_size, image_size)
 
-        super().__init__(backbone, prior_generator, multibox_head, post_process)
+        super().__init__(backbone, prior_generator, multibox_head, post_process, transform)
 
 
 def build(args):

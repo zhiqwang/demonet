@@ -2,12 +2,12 @@ import unittest
 
 import torch
 
+from torchvision.models.detection.transform import GeneralizedRCNNTransform
+
 from demonet.models.backbone import MobileNetWithExtraBlocks
-from demonet.models.prior_box import AnchorGenerator
+from demonet.models.anchor_utils import AnchorGenerator
 from demonet.models.box_head import MultiBoxLiteHead, PostProcess, SetCriterion
 from demonet.models.generalized_ssd import GeneralizedSSD
-
-from demonet.util.misc import nested_tensor_from_tensor_list
 
 from .utils import WrappedDemonet
 
@@ -46,6 +46,11 @@ class ModelTester(unittest.TestCase):
         detections_per_img = 100
         postprocessors = PostProcess(variances, score_thresh, nms_thresh, detections_per_img)
         return postprocessors
+    
+    def _init_transform(self):
+        image_size = 320
+        transform = GeneralizedRCNNTransform(image_size, image_size)
+        return transform
 
     def _init_test_criterion(self):
         variances = (0.1, 0.2)
@@ -75,8 +80,9 @@ class ModelTester(unittest.TestCase):
         prior_generator = self._init_test_prior_generator()
         multibox_head = self._init_test_multibox_head()
         post_process = self._init_test_postprocessors()
+        transform = self._init_transform()
 
-        model = GeneralizedSSD(backbone, prior_generator, multibox_head, post_process)
+        model = GeneralizedSSD(backbone, prior_generator, multibox_head, post_process, transform)
         scripted_model = torch.jit.script(model)
 
         model.eval()
@@ -95,8 +101,9 @@ class ModelTester(unittest.TestCase):
         prior_generator = self._init_test_prior_generator()
         multibox_head = self._init_test_multibox_head()
         post_process = self._init_test_postprocessors()
+        transform = self._init_transform()
 
-        model = GeneralizedSSD(backbone, prior_generator, multibox_head, post_process)
+        model = GeneralizedSSD(backbone, prior_generator, multibox_head, post_process, transform)
         wrapped_model = WrappedDemonet(model)
         scripted_model = torch.jit.script(wrapped_model)
 
