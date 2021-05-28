@@ -1,11 +1,11 @@
-import torch
-
 from functools import partial
+
+import torch
 from torch import nn, Tensor
 from torch.nn import functional as F
 from torchvision.models.utils import load_state_dict_from_url
 
-from typing import Any, Callable, Dict, List, Optional, Sequence
+from typing import Any, Callable, List, Optional, Sequence
 
 from .mobilenetv2 import _make_divisible, ConvBNActivation
 
