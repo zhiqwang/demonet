@@ -2,7 +2,7 @@ import unittest
 
 import torch
 
-from yolort.models.transform import GeneralizedYOLOTransform
+from torchvision.models.detection.transform import GeneralizedRCNNTransform
 
 from demonet.models.backbone import MobileNetWithExtraBlocks
 from demonet.models.anchor_utils import AnchorGenerator
@@ -49,7 +49,7 @@ class ModelTester(unittest.TestCase):
     
     def _init_transform(self):
         image_size = 320
-        transform = GeneralizedYOLOTransform(image_size, image_size)
+        transform = GeneralizedRCNNTransform(image_size, image_size)
         return transform
 
     def _init_test_criterion(self):

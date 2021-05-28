@@ -72,7 +72,7 @@ class GeneralizedSSD(nn.Module):
         priors = self.prior_generator(features)  # BoxMode: XYWHA_REL
         logits, bbox_reg = self.multibox_head(features)
         out_ssd = {}
-        detections = torch.jit.annotate(List[Dict[str, Tensor]], [])
+        detections: List[Dict[str, Tensor]] = []
 
         if self.training:
             out_ssd = {'pred_logits': logits, 'pred_boxes': bbox_reg, 'priors': priors}
