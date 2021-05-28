@@ -1,18 +1,13 @@
-# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
-"""
-Misc functions, including distributed helpers.
-
-Mostly copy-paste from torchvision references.
-"""
-import os
-import subprocess
-import time
 from collections import defaultdict, deque
 import datetime
 import pickle
+import time
 
 import torch
 import torch.distributed as dist
+
+import errno
+import os
 
 
 class SmoothedValue(object):
@@ -237,24 +232,27 @@ class MetricLogger(object):
             header, total_time_str, total_time / len(iterable)))
 
 
-def get_sha():
-    cwd = os.path.dirname(os.path.abspath(__file__))
+def collate_fn(batch):
+    return tuple(zip(*batch))
 
-    def _run(command):
-        return subprocess.check_output(command, cwd=cwd).decode('ascii').strip()
-    sha = 'N/A'
-    diff = "clean"
-    branch = 'N/A'
+
+def warmup_lr_scheduler(optimizer, warmup_iters, warmup_factor):
+
+    def f(x):
+        if x >= warmup_iters:
+            return 1
+        alpha = float(x) / warmup_iters
+        return warmup_factor * (1 - alpha) + alpha
+
+    return torch.optim.lr_scheduler.LambdaLR(optimizer, f)
+
+
+def mkdir(path):
     try:
-        sha = _run(['git', 'rev-parse', 'HEAD'])
-        subprocess.check_output(['git', 'diff'], cwd=cwd)
-        diff = _run(['git', 'diff-index', 'HEAD'])
-        diff = "has uncommited changes" if diff else "clean"
-        branch = _run(['git', 'rev-parse', '--abbrev-ref', 'HEAD'])
-    except Exception:
-        pass
-    message = f"sha: {sha}, status: {diff}, branch: {branch}"
-    return message
+        os.makedirs(path)
+    except OSError as e:
+        if e.errno != errno.EEXIST:
+            raise
 
 
 def setup_for_distributed(is_master):
@@ -324,22 +322,3 @@ def init_distributed_mode(args):
                                          world_size=args.world_size, rank=args.rank)
     torch.distributed.barrier()
     setup_for_distributed(args.rank == 0)
-
-
-@torch.no_grad()
-def accuracy(output, target, topk=(1,)):
-    """Computes the precision@k for the specified values of k"""
-    if target.numel() == 0:
-        return [torch.zeros([], device=output.device)]
-    maxk = max(topk)
-    batch_size = target.size(0)
-
-    _, pred = output.topk(maxk, 1, True, True)
-    pred = pred.t()
-    correct = pred.eq(target.view(1, -1).expand_as(pred))
-
-    res = []
-    for k in topk:
-        correct_k = correct[:k].view(-1).float().sum(0)
-        res.append(correct_k.mul_(100.0 / batch_size))
-    return res
