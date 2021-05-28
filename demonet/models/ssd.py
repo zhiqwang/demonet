@@ -7,12 +7,12 @@ import torch.nn.functional as F
 
 from torchvision.models import vgg
 from torchvision.models.utils import load_state_dict_from_url
-from torchvision.models.detection.transform import GeneralizedRCNNTransform
 from torchvision.ops import boxes as box_ops
 
 from typing import Any, Dict, List, Optional, Tuple
 
 from . import _utils as det_utils
+from .transform import GeneralizedRCNNTransform
 from .anchor_utils import DefaultBoxGenerator
 from .backbone_utils import _validate_trainable_layers
 
