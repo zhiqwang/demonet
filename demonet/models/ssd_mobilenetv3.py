@@ -1,19 +1,18 @@
-import torch
 import warnings
-
 from collections import OrderedDict
 from functools import partial
+
+import torch
 from torch import nn, Tensor
 from torchvision.models.utils import load_state_dict_from_url
 
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional
 
-from . import _utils as det_utils
-from . import mobilenet
+from . import mobilenet, _utils as det_utils
 from .mobilenetv3 import ConvBNActivation
-from .ssd import SSD, SSDScoringHead
-from .anchor_utils import DefaultBoxGenerator
 from .backbone_utils import _validate_trainable_layers
+from .generalized_ssd import SSD, SSDScoringHead
+from .anchor_utils import DefaultBoxGenerator
 
 
 __all__ = ['ssdlite320_mobilenet_v3_large']
@@ -166,16 +165,12 @@ def ssdlite320_mobilenet_v3_large(pretrained: bool = False, progress: bool = Tru
     <https://arxiv.org/abs/1905.02244>`_ and
     `"MobileNetV2: Inverted Residuals and Linear Bottlenecks"
     <https://arxiv.org/abs/1801.04381>`_.
-
     See :func:`~torchvision.models.detection.ssd300_vgg16` for more details.
-
     Example:
-
         >>> model = torchvision.models.detection.ssdlite320_mobilenet_v3_large(pretrained=True)
         >>> model.eval()
         >>> x = [torch.rand(3, 320, 320), torch.rand(3, 500, 400)]
         >>> predictions = model(x)
-
     Args:
         pretrained (bool): If True, returns a model pre-trained on COCO train2017
         progress (bool): If True, displays a progress bar of the download to stderr
